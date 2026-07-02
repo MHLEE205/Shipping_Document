@@ -236,7 +236,7 @@ let S = {
 };
 if (typeof window !== 'undefined') window.S = S; // 디버깅용 전역 노출
 
-// ═════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 // PKCE OAuth (CLAUDE-D365_Connect_v2_0.md §5 패턴)
 // ══════════════════════════════════════════════════════
 function b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
@@ -372,3 +372,589 @@ async function searchInvoice(){
   }
   hideLoading();
 }
+
+// ══════════════════════════════════════════════════════
+// 集計 (DOC-D-03 §4-3, §4-7)
+// ══════════════════════════════════════════════════════
+function aggregateItems(siId){
+  const details = S.siDetailCache[siId] || [];
+  // 컨테이너를 sale_detail_id 기준으로 묶어서 집계 (§4-3)
+  const byDetail = {};
+  S.containers.forEach(c => {
+    const key = c['_crcf9_sale_detail_id_value'] || c.crcf9_sale_detail_id;
+    if (!key) return;
+    if (!byDetail[key]) byDetail[key] = { bales:0, nwKg:0 };
+    byDetail[key].bales += (c.crcf9_quantity || 0);
+    byDetail[key].nwKg  += (c.crcf9_n_w || 0);
+  });
+
+  const items = details.map(d => {
+    const sdId = d['_crcf9_sale_detail_id_value'] || d.crcf9_sale_detail_id;
+    const sd = S.saleDetails.find(s => s.cr49f_sale_detailid === sdId);
+    const agg = byDetail[sdId] || { bales:0, nwKg:0 };
+    const weightMt = agg.nwKg / 1000;
+    const price = sd ? sd.cr49f_price : (d.crcf9_price || 0);
+    return {
+      saleDetailId: sdId,
+      productName: d.crcf9_productname || '',
+      hsCode: d.crcf9_hs_code || '',
+      price, bales: agg.bales, weightMt,
+      cifAmount: Math.round(weightMt * price * 100)/100,
+    };
+  }).filter(it => it.bales > 0); // 이번 인보이스에 실제로 실린 품목만
+
+  return items;
+}
+
+function computeTotals(items){
+  const cifTotal = items.reduce((s,i)=>s+i.cifAmount,0);
+  const containerCount = S.containers.length;
+  const costPerVan = S.carrierCost ? (S.carrierCost.crcf9_cost_per_van_usd || 0) : 0;
+  const freight = Math.round(costPerVan * containerCount * 100)/100;
+  const insurance = Math.round(cifTotal * INSURANCE_RATE);
+  const fob = Math.round((cifTotal - freight - insurance) * 100)/100;
+  const totalBales = items.reduce((s,i)=>s+i.bales,0);
+  const totalWeightMt = Math.round(items.reduce((s,i)=>s+i.weightMt,0)*100)/100;
+  return { cifTotal, freight, insurance, fob, totalBales, totalWeightMt, containerCount };
+}
+
+// ══════════════════════════════════════════════════════
+// UI レンダリング
+// ══════════════════════════════════════════════════════
+function fmtDate(d){ if(!d) return ''; const dt=new Date(d); return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`; }
+function fmtNum(n,dec=2){ return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
+
+function renderSummary(){
+  const b = S.booking, sc = S.saleContract;
+  document.getElementById('summaryGrid').innerHTML = `
+    <div><div class="lbl">Booking No.</div><div class="val">${b.cr49f_booking_no||''}</div></div>
+    <div><div class="lbl">Invoice No.</div><div class="val">${b.cr49f_invoice_no||''}</div></div>
+    <div><div class="lbl">Vessel/Voy</div><div class="val">${b.cr49f_main_ship_name||''}</div></div>
+    <div><div class="lbl">POL</div><div class="val">${b.crcf9_bl_pol_text||''}</div></div>
+    <div><div class="lbl">ETD</div><div class="val">${fmtDate(b.cr49f_etd)}</div></div>
+    <div><div class="lbl">ETA</div><div class="val">${fmtDate(b.cr49f_eta)}</div></div>
+    <div><div class="lbl">Contract No.</div><div class="val">${sc.cr49f_sale_contract_no||''}</div></div>
+    <div><div class="lbl">Trade Term</div><div class="val">${sc.cr49f_terms_conditions||''}</div></div>
+    <div><div class="lbl">コンテナ数</div><div class="val">${S.containers.length}</div></div>
+    <div><div class="lbl">利用可能なS/I</div><div class="val">${S.siList.map(s=>'①②③④'[s.crcf9_sino-1]||s.crcf9_sino).join(' / ')}</div></div>
+  `;
+}
+
+function renderSinoSelectors(){
+  const avail = S.siList.map(s=>s.crcf9_sino);
+  const mk = (name, sel) => [1,2,3,4].map(n => {
+    const disabled = !avail.includes(n) ? 'disabled' : '';
+    const checked = n===sel ? 'checked' : '';
+    return `<label class="radio-row"><input type="radio" name="${name}" value="${n}" ${checked} ${disabled} onchange="${name}==='ivSino'?setIvSino(${n}):setSiSino(${n})"> S/I${'①②③④'[n-1]}</label>`;
+  }).join('');
+  document.getElementById('ivSinoGrid').innerHTML = mk('ivSino', S.ivSino);
+  document.getElementById('siSinoGrid').innerHTML = mk('siSino', S.siSino);
+
+  const podMk = (prefix) => [1,2,3].map(n => `<label class="check-row"><input type="checkbox" ${n===1?'checked':''} onchange="toggle${prefix}Pod(${n})"> ${n===1?'1st':n===2?'2nd':'3rd'} POD</label>`).join('');
+  document.getElementById('ivPodGrid').innerHTML = podMk('Iv');
+  document.getElementById('siPodGrid').innerHTML = podMk('Si');
+}
+function setIvSino(n){ S.ivSino = n; }
+function setSiSino(n){ S.siSino = n; }
+function toggleIvPod(n){ S.ivPod[n] = !S.ivPod[n]; }
+function toggleSiPod(n){ S.siPod[n] = !S.siPod[n]; }
+
+function currentSi(sino){ return S.siList.find(s => s.crcf9_sino === sino) || S.siList[0]; }
+
+function podLines(si, pod, useBl){
+  const f1 = useBl ? si.crcf9_pod_bl1 : si.crcf9_place_of_delivery_1;
+  const f2 = useBl ? si.crcf9_pod_bl2 : si.crcf9_place_of_delivery_2;
+  const f3 = useBl ? si.crcf9_pod_bl3 : si.crcf9_place_of_delivery_3;
+  const arr = [];
+  if (pod[1] && f1) arr.push(f1);
+  if (pod[2] && f2) arr.push(f2);
+  if (pod[3] && f3) arr.push(f3);
+  return arr.join(' / ');
+}
+
+function showPreview(which){
+  document.querySelectorAll('.doc-wrap').forEach(el => el.style.display = 'none');
+  const el = document.getElementById('doc-'+which);
+  if (el) { el.style.display = 'block'; if (typeof el.scrollIntoView === 'function') el.scrollIntoView({behavior:'smooth'}); }
+}
+
+function printPage(which){
+  document.querySelectorAll('.doc-wrap').forEach(el => el.classList.remove('print-target'));
+  const el = document.getElementById('doc-'+which);
+  if (el){ el.classList.add('print-target'); window.print(); }
+}
+
+// ══════════════════════════════════════════════════════
+// 좌표 정밀 렌더 엔진 (DOC-D-03 §8 — 실물 NA2605-08 PDF에서 fitz로 추출한 pt 좌표)
+// ══════════════════════════════════════════════════════
+
+// DOC-D-03 §8 실물 PDF에서 추출한 정적 테두리선 좌표 (헤더 영역, 데이터 무관 고정)
+const IV_HEADER_LINES = [[17.01, 33.62, 569.77, 0.72], [17.01, 103.23, 337.99, 0.72], [17.01, 204.41, 337.99, 0.72], [17.01, 239.57, 337.99, 0.72], [354.99, 34.34, 0.72, 223.89], [355.71, 75.24, 231.06, 0.72], [355.71, 103.23, 231.06, 0.72], [355.71, 147.0, 231.06, 0.72], [355.71, 190.05, 231.06, 0.72], [17.01, 258.23, 569.77, 0.72]];
+const PL_HEADER_LINES = [[17.01, 48.21, 569.77, 0.72], [17.01, 117.82, 349.47, 0.72], [17.01, 204.65, 349.47, 0.72], [17.01, 239.81, 349.47, 0.72], [366.48, 48.93, 0.72, 223.89], [367.19, 89.83, 219.58, 0.72], [367.19, 117.82, 219.58, 0.72], [367.19, 161.59, 219.58, 0.72], [367.19, 204.65, 219.58, 0.72], [17.01, 272.82, 569.77, 0.72]];
+const SI0_ALL_LINES = [[16.9, 8.24, 351.57, 0.6], [368.1, 8.4, 0.52, 296.49], [16.9, 304.52, 351.57, 0.6], [16.75, 8.4, 0.52, 296.49], [368.1, 8.4, 0.52, 67.55], [16.9, 75.58, 351.57, 0.6], [16.75, 8.4, 0.52, 67.55], [16.75, 75.58, 351.87, 0.6], [368.1, 75.58, 0.52, 54.39], [16.75, 129.45, 351.87, 0.6], [16.75, 75.58, 0.52, 54.39], [368.1, 129.45, 0.52, 94.79], [16.75, 223.72, 351.87, 0.6], [16.75, 129.45, 0.52, 94.79], [16.9, 223.72, 186.25, 0.6], [202.78, 223.87, 0.52, 27.15], [16.9, 250.66, 186.25, 0.6], [16.75, 223.87, 0.52, 27.15], [202.93, 223.72, 165.54, 0.6], [368.1, 223.87, 0.52, 27.15], [202.93, 250.66, 165.54, 0.6], [202.78, 250.81, 0.52, 26.63], [16.9, 277.07, 186.25, 0.6], [16.75, 250.81, 0.52, 26.63], [368.1, 250.81, 0.52, 26.63], [202.93, 277.07, 165.54, 0.6], [16.9, 277.59, 186.25, 0.6], [202.78, 277.74, 0.52, 27.15], [16.9, 304.52, 186.25, 0.6], [16.75, 277.74, 0.52, 27.15], [202.93, 277.59, 165.54, 0.6], [368.1, 277.74, 0.52, 27.15], [202.93, 304.52, 165.54, 0.6], [368.1, 8.24, 218.92, 0.6], [586.51, 8.24, 0.52, 296.8], [368.1, 304.52, 218.92, 0.6], [368.1, 8.24, 0.52, 296.8], [586.51, 8.24, 0.52, 13.99], [368.1, 21.71, 218.92, 0.6], [368.1, 8.24, 0.52, 13.99], [586.51, 21.71, 0.52, 13.99], [368.1, 35.18, 218.92, 0.6], [368.1, 21.71, 0.52, 13.99], [586.51, 35.18, 0.52, 13.99], [368.1, 48.65, 218.92, 0.6], [368.1, 35.18, 0.52, 13.99], [586.51, 48.65, 0.52, 27.45], [368.1, 75.58, 218.92, 0.6], [368.1, 48.65, 0.52, 27.45], [586.51, 75.58, 0.52, 54.39], [368.1, 129.45, 218.92, 0.6], [586.51, 129.45, 0.52, 40.92], [368.1, 169.85, 218.92, 0.6], [368.1, 129.45, 0.52, 40.92], [586.51, 169.85, 0.52, 108.26], [368.1, 277.59, 218.92, 0.6], [368.1, 169.85, 0.52, 108.26], [586.52, 304.52, 0.52, 18.65], [16.75, 304.52, 0.52, 18.65], [491.91, 317.73, 6.21, 0.6], [498.11, 317.73, 5.68, 0.6], [503.78, 317.73, 5.28, 0.6], [509.05, 317.73, 5.28, 0.6], [514.32, 317.73, 5.28, 0.6], [519.6, 317.73, 5.28, 0.6], [524.87, 317.73, 3.78, 0.6], [528.64, 317.73, 5.28, 0.6], [533.92, 317.73, 5.28, 0.6], [16.75, 322.65, 76.48, 0.6], [92.71, 322.65, 0.52, 18.65], [16.75, 340.78, 76.48, 0.6], [16.75, 322.65, 0.52, 18.65], [92.71, 322.65, 275.9, 0.6], [368.1, 322.65, 0.52, 18.65], [92.71, 340.78, 275.9, 0.6], [368.1, 322.65, 52.74, 0.6], [420.32, 322.65, 0.52, 18.65], [368.1, 340.78, 52.74, 0.6], [420.32, 322.65, 62.24, 0.6], [482.04, 322.65, 0.52, 18.65], [420.32, 340.78, 62.24, 0.6], [482.04, 322.65, 53.78, 0.6], [535.3, 322.65, 0.52, 18.65], [482.04, 340.78, 53.78, 0.6], [535.3, 322.65, 51.71, 0.6], [586.49, 322.65, 0.52, 18.65], [535.3, 340.78, 51.71, 0.6], [92.71, 340.78, 0.52, 395.24], [16.75, 735.5, 76.48, 0.6], [16.75, 340.78, 0.52, 395.24], [92.86, 340.78, 275.6, 0.6], [368.1, 340.93, 0.52, 394.93], [92.86, 735.5, 275.6, 0.6], [92.71, 340.93, 0.52, 394.93], [420.32, 340.78, 0.52, 395.24], [368.1, 735.5, 52.74, 0.6], [368.1, 340.78, 0.52, 395.24], [420.32, 340.78, 31.38, 0.6], [451.18, 340.78, 0.52, 395.24], [420.32, 735.5, 31.38, 0.6], [451.18, 340.78, 31.38, 0.6], [482.04, 340.78, 0.52, 395.24], [451.18, 735.5, 31.38, 0.6], [535.3, 340.78, 0.52, 395.24], [482.04, 735.5, 53.78, 0.6], [586.49, 340.78, 0.52, 395.24], [535.3, 735.5, 51.71, 0.6], [586.52, 735.65, 0.52, 15.75], [16.75, 735.65, 0.52, 15.75], [16.9, 735.5, 76.18, 0.6], [92.71, 735.65, 0.52, 15.75], [16.9, 751.04, 76.18, 0.6], [368.1, 735.65, 0.52, 15.75], [92.86, 751.04, 275.6, 0.6], [368.25, 735.5, 52.44, 0.6], [420.32, 735.65, 0.52, 15.75], [368.25, 751.04, 52.44, 0.6], [420.47, 735.5, 31.07, 0.6], [451.18, 735.65, 0.52, 15.75], [420.47, 751.04, 31.07, 0.6], [451.33, 735.5, 31.07, 0.6], [482.04, 735.65, 0.52, 15.75], [451.33, 751.04, 31.07, 0.6], [482.19, 735.5, 53.48, 0.6], [535.3, 735.65, 0.52, 15.75], [482.19, 751.04, 53.48, 0.6], [535.45, 735.5, 51.4, 0.6], [535.45, 751.04, 51.4, 0.6], [586.52, 751.19, 0.52, 2.8], [16.75, 751.19, 0.52, 2.8], [586.52, 753.78, 0.52, 67.55], [16.75, 753.78, 0.52, 67.55]];
+const SI1_HEADER_LINES = [[586.52, 34.26, 0.52, 155.09], [16.75, 34.26, 0.52, 155.09], [586.52, 61.05, 0.52, 32.63], [16.75, 61.05, 0.52, 32.63], [16.75, 61.05, 95.48, 0.6], [111.71, 61.05, 0.52, 16.58], [16.75, 77.1, 95.48, 0.6], [16.75, 61.05, 0.52, 16.58], [111.71, 61.05, 71.74, 0.6], [182.93, 61.05, 0.52, 32.63], [111.71, 93.16, 71.74, 0.6], [111.71, 61.05, 0.52, 32.63], [182.93, 61.05, 0.52, 16.58], [111.71, 77.1, 71.74, 0.6], [130.98, 72.68, 5.17, 0.6], [136.14, 72.68, 5.45, 0.6], [141.58, 72.68, 2.44, 0.6], [144.02, 72.68, 5.84, 0.6], [149.84, 72.68, 4.73, 0.6], [154.56, 72.68, 4.82, 0.6], [159.37, 72.68, 4.8, 0.6], [182.93, 61.05, 161.95, 0.6], [344.36, 61.05, 0.52, 32.63], [182.93, 93.16, 161.95, 0.6], [344.36, 61.05, 29.01, 0.6], [372.85, 61.05, 0.52, 32.63], [344.36, 93.16, 29.01, 0.6], [372.85, 61.05, 52.74, 0.6], [425.07, 61.05, 0.52, 32.63], [372.85, 93.16, 52.74, 0.6], [425.07, 61.05, 47.99, 0.6], [472.55, 61.05, 0.52, 32.63], [425.07, 93.16, 47.99, 0.6], [472.55, 61.05, 57.49, 0.6], [529.52, 61.05, 0.52, 32.63], [472.55, 93.16, 57.49, 0.6], [529.52, 61.05, 57.49, 0.6], [529.52, 93.16, 57.49, 0.6], [16.75, 93.16, 19.5, 0.6], [35.74, 93.16, 0.52, 20.2], [16.75, 93.16, 0.52, 20.2], [35.74, 93.16, 76.48, 0.6], [111.7, 93.16, 0.52, 20.2], [182.92, 93.16, 0.52, 20.2], [344.35, 93.16, 0.52, 20.2], [372.84, 93.16, 0.52, 20.2], [372.84, 93.16, 52.74, 0.6], [425.06, 93.16, 0.52, 20.2], [425.06, 93.16, 19.5, 0.6], [444.05, 93.16, 0.52, 20.2], [444.05, 93.16, 29.01, 0.6], [472.54, 93.16, 0.52, 20.2], [472.54, 93.16, 57.49, 0.6], [529.52, 93.16, 0.52, 20.2], [586.49, 93.16, 0.52, 20.2]];
+
+function LNs(arr){ return arr.map(l => LN(l[0], l[1], l[2], l[3])).join(''); }
+// 반복 행 테이블의 전체 격자(헤더 1행 + 데이터 N행)를 그림 — TOTAL 행 테두리는 별도 처리
+function tableGrid(colXs, headerTopY, rowH, nDataRows, includeHeaderRow=true){
+  let html = '';
+  const totalRows = (includeHeaderRow?1:0) + nDataRows;
+  for (let i=0;i<=totalRows;i++){
+    html += LN(colXs[0], headerTopY + i*rowH, colXs[colXs.length-1]-colXs[0], 0.6);
+  }
+  colXs.forEach(x => { html += LN(x, headerTopY, 0.6, totalRows*rowH); });
+  return html;
+}
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function T(x,y,size,text,opts={}){
+  const wrap = opts.wrap ? ' wrap' : '';
+  const w = opts.w ? `width:${opts.w}pt;` : '';
+  const align = opts.align ? `text-align:${opts.align};` : '';
+  const bold = opts.bold ? 'font-weight:bold;' : '';
+  const italic = opts.italic ? 'font-style:italic;' : '';
+  const cjk = opts.cjk ? "font-family:'Noto Sans JP',sans-serif;" : '';
+  return `<div class="tx${wrap}" style="left:${x}pt;top:${y}pt;font-size:${size}pt;${w}${align}${bold}${italic}${cjk}">${esc(text)}</div>`;
+}
+function LN(x,y,w,h){ return `<div class="ln" style="left:${x}pt;top:${y}pt;width:${w}pt;height:${Math.max(h,0.4)}pt;"></div>`; }
+function IMGEL(x,y,w,h,src){ return `<img class="tx" style="left:${x}pt;top:${y}pt;width:${w}pt;height:${h}pt;" src="${src}">`; }
+
+const LOGO_SRC = 'data:image/png;base64,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';
+
+// 공통 상단 헤더(Seller/Buyer/Date/InvoiceNo/...) — Invoice/PackingList 좌표가 서로 달라 kind별 분리
+function headerBlockCommon(kind, si, b, sc){
+  const isPl = kind === 'pl';
+  const labelX = isPl ? 368.6 : 357.1;
+  const Y = isPl
+    ? { seller:47.3, exporter:57.6, leenear:53.0, addr1:67.0, addr2:78.2, phoneFax:104.7, faxX:215.1,
+        buyer:116.9, importer:127.3, buyerName:122.6, buyerAddr1:136.6,
+        tel:191.5, telFaxX:215.1, tradeTerm:217.5, tradeTermV:218.8, lcNo:244.1, lcNoV:244.6, shipMark:261.3,
+        date:50.7, invNo:64.3, contNo:78.0,
+        pay:99.1, payV:100.4, ship:126.4, bl:147.9, etd:170.2, eta:191.3, from:208.9, to:252.0 }
+    : { seller:32.7, exporter:43.1, leenear:38.4, addr1:51.7, addr2:62.0, phoneFax:90.1, faxX:209.3,
+        buyer:107.7, importer:118.0, buyerName:104.1, buyerAddr1:131.3,
+        tel:193.0, telFaxX:209.3, tradeTerm:217.3, tradeTermV:218.6, lcNo:243.8, lcNoV:244.3, shipMark:261.3,
+        date:36.1, invNo:49.7, contNo:63.4,
+        pay:84.5, payV:85.8, ship:107.5, bl:129.0, etd:151.3, eta:172.4, from:194.3, to:237.4 };
+
+  let h = '';
+  h += IMGEL(63.33, 8.5, 101.11, 20.09, LOGO_SRC);
+  h += T(300, isPl?35.5:18.0, 11.5, isPl?'PACKING LIST':'COMMERCIAL INVOICE', {bold:true, italic:!isPl, align:'right', w:286});
+
+  const VX = 67.5; // 값 컬럼 x — 원본 63.6에서 살짝 오른쪽으로 이동해 라벨과의 간격 확보
+  h += T(17.0, Y.seller+2.8, 8.6, 'Seller', {bold:true});
+  h += T(20.4, Y.exporter+2.8, 8.6, '/ Exporter', {bold:true});
+  h += T(VX, Y.leenear+2.8, 8.6, 'LEENEAR CORPORATION');
+  h += T(VX, Y.addr1, 8.6, 'VORT SUIDOBASHI 3 5FL, 2-8-11 KANDASARUGAKUCHO, CHIYODA, ');
+  h += T(VX, Y.addr2, 8.6, 'TOKYO, JAPAN, 101-0064');
+  h += T(VX, Y.phoneFax, 8.6, si.crcf9_shipper_tel || 'TEL: +81-3-3528-9850');
+  h += T(Y.faxX+4, Y.phoneFax, 8.6, si.crcf9_shipper_fax || 'FAX: +81-3-3528-9851');
+
+  h += T(17.0, Y.buyer+2.8, 8.6, 'Buyer', {bold:true});
+  h += T(20.4, Y.importer+2.8, 8.6, '/ Importer', {bold:true});
+  h += T(VX, Y.buyerName+2.8, 8.6, si.crcf9_notify_party || '');
+  h += T(VX, Y.buyerAddr1, 8.6, si.crcf9_address || '', {w:286, wrap:true});
+  h += T(VX, Y.tel, 8.6, si.crcf9_tel || '');
+  h += T(Y.telFaxX+4, Y.tel, 8.6, si.crcf9_fax || '');
+
+  h += T(17.0, Y.tradeTerm, 8.6, 'Trade Term', {bold:true});
+  h += T(88.0, Y.tradeTermV, 7.2, sc.cr49f_terms_conditions_full || si.cr49f_payment_terms || '');
+  h += T(17.0, Y.lcNo, 8.6, 'L/C No.', {bold:true});
+  h += T(VX, Y.lcNoV, 8.6, si.cr49f_lc_no || '');
+  if (isPl){
+    h += T(17.0, Y.shipMark, 8.6, 'Shipping Mark', {bold:true});
+    h += T(88.0, Y.shipMark, 8.6, si.crcf9_shipping_mark || 'NO MARK');
+  }
+
+  h += T(labelX, Y.date, 8.6, 'Date', {bold:true});
+  h += T(420, Y.date, 8.6, fmtDate(new Date()), {align:'right', w:163.4});
+  h += T(labelX, Y.invNo, 8.6, 'Invoice No', {bold:true});
+  h += T(420, Y.invNo, 8.6, b.cr49f_invoice_no || '', {align:'right', w:163.4});
+  h += T(labelX, Y.contNo, 8.6, 'Contract No', {bold:true});
+  h += T(420, Y.contNo, 8.6, sc.cr49f_sale_contract_no || '', {align:'right', w:163.4});
+  h += T(labelX, Y.pay, 8.6, 'Payment Term', {bold:true});
+  h += T(550.1, Y.payV, 7.2, si.crcf9_payment_deadline || '', {align:'right', w:35});
+  h += T(labelX, Y.ship, 8.6, 'Shipped per', {bold:true});
+  h += T(430, Y.ship, 8.6, b.cr49f_main_ship_name || '', {align:'right', w:153.4});
+  h += T(labelX, Y.bl, 8.6, 'B/L No.', {bold:true});
+  h += T(420, Y.bl, 8.6, b.cr49f_bl_number || '', {align:'right', w:163.4});
+  h += T(labelX, Y.etd, 8.6, 'On or about', {bold:true});
+  h += T(420, Y.etd, 8.6, fmtDate(b.cr49f_etd), {align:'right', w:163.4});
+  h += T(labelX, Y.eta, 8.6, 'ETA', {bold:true});
+  h += T(420, Y.eta, 8.6, fmtDate(b.cr49f_eta), {align:'right', w:163.4});
+  h += T(labelX, Y.from, 8.6, 'From', {bold:true});
+  h += T(420, Y.from, 8.6, (S.regionJapan ? S.regionJapan.crcf9_pol + ', JAPAN' : ''), {align:'right', w:163.4});
+  h += T(labelX, Y.to, 8.6, 'To', {bold:true});
+  h += T(390, Y.to, 8.6, podLines(si, S.ivPod, false), {align:'right', w:193.4});
+
+  h += isPl ? LNs(PL_HEADER_LINES) : LNs(IV_HEADER_LINES);
+  return h;
+}
+// ── Invoice ──────────────────────────────────────────
+function renderInvoice(){
+  const si = currentSi(S.ivSino);
+  const items = aggregateItems(si.cr49f_s_iid);
+  const t = computeTotals(items);
+  const b = S.booking, sc = S.saleContract;
+  const ROWH = 20.1, ROW0 = 299.6;
+
+  let body = headerBlockCommon('invoice', si, b, sc);
+  body += T(115.2, 279.6, 7.2, 'DESCRIPTION OF GOODS');
+  body += T(320.8, 279.6, 7.2, 'Bales');
+  body += T(377.8, 275.0, 7.2, 'Weight'); body += T(382.8, 284.1, 7.2, '(MT)');
+  body += T(445.9, 275.0, 7.2, 'Unit Price'); body += T(446.1, 284.1, 7.2, '(US$/MT)');
+  body += T(522.4, 275.0, 7.2, 'CIF Amount'); body += T(533.3, 284.1, 7.2, '(US$)');
+  const IV_COLS = [16.6, 304.4, 354.6, 426.4, 498.1, 586.4];
+  body += tableGrid(IV_COLS, 272.9, ROWH, items.length);
+
+  items.forEach((it,i) => {
+    const y = ROW0 + i*ROWH;
+    body += T(18.4, y, 7.2, it.productName);
+    body += T(304.4, y, 7.2, it.bales, {align:'right', w:47.7});
+    body += T(354.6, y, 7.2, fmtNum(it.weightMt), {align:'right', w:69.3});
+    body += T(426.4, y, 7.2, fmtNum(it.price,0), {align:'right', w:69.2});
+    body += T(498.1, y, 7.2, fmtNum(it.cifAmount), {align:'right', w:85.8});
+  });
+  const totalY = ROW0 + items.length*ROWH;
+  body += LN(16.6, totalY-8.8, 570.49, 0.6);
+  body += T(18.4, totalY, 7.2, 'TOTAL');
+  body += T(304.4, totalY, 7.2, t.totalBales, {align:'right', w:47.7});
+  body += T(354.6, totalY, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:69.3});
+  body += T(498.1, totalY, 7.2, fmtNum(t.cifTotal), {align:'right', w:85.8});
+  body += LN(16.6, totalY+13.4, 570.49, 0.6);
+
+  body += T(27.8, totalY+17.9, 8.6, 'COUNTRY OF ORIGIN :');
+  body += T(149.8, totalY+18.4, 8.6, 'JAPAN');
+  body += T(303.3, totalY+33.1, 8.6, 'FREIGHT');
+  body += T(528.4, totalY+33.1, 8.6, 'US$ '+fmtNum(t.freight));
+  body += T(303.3, totalY+50.3, 8.6, 'INSURANCE PREMIUM');
+  body += T(552.0, totalY+50.3, 8.6, 'US$ '+t.insurance);
+  body += LN(299.7, totalY+67.0, 287.04, 1.44);
+  body += T(303.3, totalY+69.0, 8.6, 'FOB(FREE ON BOARD)', {bold:true});
+  body += T(523.4, totalY+69.0, 8.6, 'US$ '+fmtNum(t.fob), {bold:true});
+  body += T(372.9, 736.8, 8.6, 'LEENEAR CORPORATION');
+  body += LN(371.5, 785.0, 215.3, 1.4);
+  body += T(372.9, 789.9, 8.6, S.userDisplayName || 'LEENEAR');
+
+  buildDocWrap('invoice', [body]);
+}
+
+// ── Packing List (다중 페이지 지원) ───────────────────
+const PL_ROWS_PER_PAGE = 15; // DOC-D-03 §8-6: 헤더+TOTAL+서명란 여백 확보한 안전 행수
+function renderPackingList(){
+  const si = currentSi(S.ivSino);
+  const items = aggregateItems(si.cr49f_s_iid);
+  const t = computeTotals(items);
+  const b = S.booking, sc = S.saleContract;
+  const ROWH = 20.1, ROW0 = 314.2;
+
+  const byDetail = {};
+  S.containers.forEach(c => {
+    const key = c['_crcf9_sale_detail_id_value'] || c.crcf9_sale_detail_id;
+    if (!byDetail[key]) byDetail[key] = [];
+    byDetail[key].push(c);
+  });
+  const rows = [];
+  items.forEach(it => (byDetail[it.saleDetailId]||[]).forEach(c => rows.push({it,c})));
+
+  const chunks = [];
+  for (let i=0;i<rows.length;i+=PL_ROWS_PER_PAGE) chunks.push(rows.slice(i,i+PL_ROWS_PER_PAGE));
+  if (chunks.length === 0) chunks.push([]);
+
+  const pages = chunks.map((chunk, pageIdx) => {
+    const isLast = pageIdx === chunks.length-1;
+    let body = headerBlockCommon('pl', si, b, sc);
+    body += T(96.9, 294.1, 7.2, 'DESCRIPTION OF GOODS');
+    body += T(273.2, 289.6, 7.2, 'Partial ');
+    body += T(277.6, 298.8, 7.2, 'NO.');
+    body += T(309.1, 294.1, 7.2, 'Container NO.');
+    body += T(378.6, 294.1, 7.2, 'Seal NO.');
+    body += T(424.5, 294.1, 7.2, 'Bales');
+    body += T(452.9, 289.6, 7.2, 'Net Weight '); body += T(464.9, 298.8, 7.2, '(MT)');
+    body += T(505.0, 289.6, 7.2, 'Gross Weight'); body += T(519.8, 298.8, 7.2, '(MT)');
+    body += T(564.1, 294.1, 7.2, 'Type');
+    if (chunks.length > 1){
+      body += T(500, 261.3, 8.6, `(Page ${pageIdx+1}/${chunks.length})`, {align:'right', w:80});
+    }
+    const PL_COLS = [16.6, 267.8, 300.1, 366.1, 419.2, 447.2, 498.1, 557.0, 586.4];
+    body += tableGrid(PL_COLS, 287.5, ROWH, chunk.length);
+
+    chunk.forEach((row, i) => {
+      const y = ROW0 + i*ROWH;
+      const nw = (row.c.crcf9_n_w||0)/1000, gw = (row.c.crcf9_g_w||row.c.crcf9_n_w||0)/1000;
+      const rowNo = chunks.slice(0,pageIdx).reduce((s,c)=>s+c.length,0) + i + 1;
+      body += T(23.8, y, 7.2, rowNo);
+      body += T(36.0, y, 7.2, row.it.productName);
+      body += T(277.5, y, 7.2, row.c.crcf9_partial_no||'');
+      body += T(308.0, y, 7.2, row.c.crcf9_container_no||'');
+      body += T(373.9, y, 7.2, row.c.crcf9_seal_no||'');
+      body += T(429.1, y, 7.2, row.c.crcf9_quantity||0, {align:'right', w:15.6});
+      body += T(463.3, y, 7.2, fmtNum(nw), {align:'right', w:30});
+      body += T(518.2, y, 7.2, fmtNum(gw), {align:'right', w:30});
+      body += T(562.5, y, 7.2, row.c.crcf9_type||'');
+    });
+
+    if (isLast){
+      const totalY = ROW0 + chunk.length*ROWH + 2.3;
+      body += LN(16.65, totalY-6.65, 570.49, 0.6);
+      body += T(342.6, totalY, 7.2, `TOTAL   :${S.containers.length}   Containers`);
+      body += T(429.1, totalY, 7.2, t.totalBales, {align:'right', w:15.6});
+      body += T(463.3, totalY, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:30});
+      body += T(518.2, totalY, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:30});
+      body += LN(16.65, totalY+13.4, 570.49, 0.6);
+      body += T(27.8, totalY+18.1, 8.6, 'COUNTRY OF ORIGIN :');
+      body += T(149.8, totalY+18.6, 8.6, 'JAPAN');
+      body += T(372.9, 744.2, 8.6, 'LEENEAR CORPORATION');
+      body += LN(371.5, 785.0, 215.3, 1.4);
+      body += T(372.9, 797.4, 8.6, S.userDisplayName || 'LEENEAR');
+    } else {
+      body += T(480, 800, 8.6, '(Continued on next page)', {align:'right', w:100, italic:true});
+    }
+    return body;
+  });
+
+  buildDocWrap('pl', pages);
+}
+
+// ── S/I ───────────────────────────────────────────────
+const BL_TEXT = {
+  original: 'Bill(s) of Lading   :   (3 ORIGINALS with NON-NEGOTIABLE COPY)',
+  surrender: 'Bill(s) of Lading   :   (SURRENDERED) ※文言未確認',
+  waybill: 'Bill(s) of Lading   :   (SEA WAYBILL) ※文言未確認',
+};
+function substituteBlText1(text, totalBales, totalNwKg){
+  if (!text) return '';
+  return text.replace(/XXKGS/g, Math.round(totalNwKg) + 'KGS').replace(/XXBALES/g, totalBales + 'BALES');
+}
+
+const SI_ROWS_PER_PAGE2 = 18; // 2페이지(CONTAINER LOADING PLAN) 안전 행수
+function renderSI(){
+  const si = currentSi(S.siSino);
+  const items = aggregateItems(si.cr49f_s_iid);
+  const t = computeTotals(items);
+  const b = S.booking;
+  const blType = document.querySelector('input[name="blType"]:checked')?.value || 'original';
+
+  let descBlock = '';
+  const bl1 = si.crcf9_bl_text1 || '';
+  if (bl1.includes('XX')){
+    descBlock += substituteBlText1(bl1, t.totalBales, t.totalWeightMt*1000) + '\n\n';
+    if (items[0]) descBlock += items[0].productName + '\n\n';
+    if (items[0]) descBlock += items[0].hsCode + '\n\n';
+    descBlock += 'L/C NO.: ' + (si.cr49f_lc_no||'') + '\n\n';
+    if (si.crcf9_bl_text2) descBlock += si.crcf9_bl_text2 + '\n\n';
+  } else {
+    items.forEach(i => descBlock += i.productName + '\n\n');
+    items.forEach(i => descBlock += i.hsCode + '\n');
+    descBlock += '\n' + (si.cr49f_lc_no ? 'L/C NO.: '+si.cr49f_lc_no+'\n\n' : '');
+    if (bl1) descBlock += bl1 + '\n\n';
+    if (si.crcf9_bl_text2) descBlock += si.crcf9_bl_text2 + '\n';
+  }
+  descBlock += '\nFREIGHT PREPAID AS ARRANGED';
+
+  // ── Page 1: 헤더 + DESCRIPTION OF PACKAGES AND GOODS ──
+  let p1 = LNs(SI0_ALL_LINES);
+  p1 += T(19.6, 12.4, 5.2, 'SHIPPER');
+  p1 += T(19.6, 25.0, 7.2, 'LEENEAR CORPORATION');
+  p1 += T(19.6, 35.9, 7.2, 'VORT SUIDOBASHI 3 5FL, 2-8-11 KANDASARUGAKUCHO, CHIYODA, TOKYO, JAPAN, 101-0064', {w:340, wrap:true});
+  p1 += T(19.6, 65.4, 7.2, si.crcf9_shipper_tel || 'PHONE: 81335289850');
+  p1 += T(193.9, 65.4, 7.2, si.crcf9_shipper_fax || 'FAX: 81335289851');
+  p1 += T(370.9, 12.4, 5.2, 'BOOKING NUMBER');
+  p1 += T(487.9, 11.2, 7.2, b.cr49f_booking_no||'');
+  p1 += T(391.0, 54.5, 13.5, 'SHIPPING INSTRUCTION', {bold:true});
+  p1 += T(19.6, 79.8, 5.2, 'CONSIGNEE');
+  p1 += T(19.6, 90.3, 7.2, si.crcf9_consignee||'', {w:340, wrap:true});
+  p1 += T(370.9, 80.8, 5.2, 'FORWARDING AGENT');
+  p1 += T(19.6, 132.1, 5.2, 'NOTIFY PARTY/INTERMEDIATE CONSIGNEE');
+  p1 += T(19.6, 141.1, 7.2, si.crcf9_notify_party||'');
+  p1 += T(19.6, 154.0, 7.2, si.crcf9_address||'', {w:340, wrap:true});
+  p1 += T(370.9, 132.4, 7.2, 'FAX NUMBER:');
+  p1 += T(370.9, 145.8, 7.2, '03-3528-9851');
+  p1 += T(370.9, 159.6, 7.2, 'メールアドレス', {cjk:true});
+  p1 += T(424.1, 159.6, 7.2, ' :       photo_rcp@leenearcorp.com');
+  p1 += T(370.9, 175.1, 5.2, 'ALSO NOTIFY/DOMESTIC ROUTING/');
+  p1 += T(19.6, 213.6, 7.2, si.crcf9_tel||'');
+  p1 += T(193.5, 213.6, 7.2, si.crcf9_fax||'');
+  p1 += T(19.6, 227.9, 5.2, 'INITIAL CARRIAGE (MODE)');
+  p1 += T(205.6, 227.9, 5.2, 'PLACE OF RECEIPT');
+  p1 += T(209.8, 240.0, 7.2, b.crcf9_bl_pol_text||'');
+  p1 += T(19.6, 254.8, 5.2, 'EXPORT CARRIER (Vessel, voyage)');
+  p1 += T(205.6, 254.8, 5.2, 'PORT OF LOADING');
+  p1 += T(23.7, 266.9, 7.2, b.cr49f_main_ship_name||'');
+  p1 += T(209.8, 266.9, 7.2, b.crcf9_bl_pol_text||'');
+  p1 += T(19.6, 280.5, 5.2, 'PORT OF DISCHARGE');
+  p1 += T(205.6, 280.5, 5.2, 'PLACE OF DELIVERY');
+  const podText = podLines(si, S.siPod, true) || podLines(si, S.siPod, false);
+  p1 += T(23.7, 288.7, 7.2, podText, {w:150, wrap:true});
+  p1 += T(209.8, 288.7, 7.2, podText, {w:150, wrap:true});
+  p1 += T(142.4, 309.4, 8.3, 'DESCRIPTION OF PACKAGES AND GOODS');
+  p1 += T(491.9, 309.4, 8.3, b.cr49f_invoice_no||'');
+  p1 += T(29.2, 329.5, 6.2, 'SHIPPING MARK');
+  p1 += T(185.9, 328.3, 6.7, 'DESCRIPTION OF GOODS');
+  p1 += T(369.4, 323.9, 6.2, 'MEASUREMENT '); p1 += T(387.0, 331.4, 6.2, '(M3)');
+  p1 += T(435.2, 323.9, 6.2, 'QUANTITY');
+  p1 += T(483.6, 323.9, 6.2, 'GROSS WEIGHT'); p1 += T(501.6, 331.4, 6.2, '(MT)');
+  p1 += T(538.0, 323.9, 6.2, 'TARE WEIGHT '); p1 += T(553.8, 331.4, 6.2, '(MT)');
+  p1 += T(36.7, 344.1, 7.2, si.crcf9_shipping_mark || 'NO MARK');
+  p1 += T(439.2, 344.1, 7.2, t.totalBales, {align:'right', w:9.5});
+  p1 += T(454.6, 344.1, 7.2, 'BALES');
+  p1 += T(510.9, 344.1, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:21.9});
+  const totalTw = S.containers.reduce((s,c)=>s+(c.crcf9_t_w||0),0)/1000;
+  p1 += T(557.2, 344.1, 7.2, fmtNum(totalTw,3), {align:'right', w:26.8});
+  p1 += T(95.6, 346.8, 7.2, descBlock, {w:269, wrap:true});
+  p1 += T(19.6, 756.5, 7.2, 'Ocean Freight');
+  p1 += T(304.5, 756.5, 7.2, ':      (PREPAID)');
+  p1 += T(19.6, 770.0, 7.2, 'Loading Terminal Handling Charge / Container Handling Charge');
+  p1 += T(304.5, 770.0, 7.2, ':      (PREPAID)');
+  p1 += T(19.6, 783.5, 7.2, 'Destination Terminal Handling Charge / Container Handling Charge');
+  p1 += T(304.5, 783.5, 7.2, ':      (COLLECT)');
+  p1 += T(19.6, 797.0, 7.2, 'Place of issue / Prepaid at');
+  p1 += T(304.5, 797.0, 7.2, ':      (TOKYO,JAPAN)');
+  p1 += T(19.6, 810.4, 7.2, 'Bill(s) of Lading');
+  p1 += T(304.5, 810.4, 7.2, ':     ' + BL_TEXT[blType].split(':')[1]);
+
+  // ── Page 2+: CONTAINER LOADING PLAN (다중 페이지 지원) ──
+  const ROWH2 = 19.7, ROW02 = 99.5;
+  const chunks = [];
+  for (let i=0;i<S.containers.length;i+=SI_ROWS_PER_PAGE2) chunks.push(S.containers.slice(i,i+SI_ROWS_PER_PAGE2));
+  if (chunks.length===0) chunks.push([]);
+
+  const p2pages = chunks.map((chunk, pageIdx) => {
+    const isLast = pageIdx===chunks.length-1;
+    let p2 = LNs(SI1_HEADER_LINES);
+    p2 += T(396.9, 36.6, 8.3, `Booking NO      :       ${b.cr49f_booking_no||''}`);
+    p2 += T(110.2, 40.0, 13.5, 'CONTAINER LOADING PLAN', {bold:true});
+    p2 += T(396.9, 50.1, 8.3, `Invoice NO        :       ${b.cr49f_invoice_no||''}`);
+    if (chunks.length>1) p2 += T(480,50.1,8.3,`(Page ${pageIdx+1}/${chunks.length})`,{align:'right',w:100});
+    p2 += T(33.1, 65.7, 6.7, 'SHIPPING MARK :');
+    p2 += T(131.0, 65.7, 6.7, si.crcf9_shipping_mark || 'NO MARK');
+    p2 += T(190.3, 73.7, 6.7, 'DESCRIPTION OF PACKAGES AND GOODS');
+    p2 += T(351.2, 62.3, 6.2, 'TYPE');
+    p2 += T(378.2, 62.8, 5.2, 'MEASUREMENT '); p2 += T(393.0, 75.3, 5.2, '(M3)');
+    p2 += T(432.8, 62.3, 6.2, 'QUANTITY');
+    p2 += T(475.9, 62.3, 6.2, 'GROSS WEIGHT'); p2 += T(485.1, 69.8, 6.2, '(KG)');
+    p2 += T(535.1, 62.3, 6.2, 'TARE WEIGHT '); p2 += T(533.3, 69.8, 6.2, '(KG)');
+    p2 += T(29.2, 81.6, 6.2, 'CONTAINER NUMBERS');
+    p2 += T(122.9, 81.6, 6.2, 'SEAL NUMBERS');
+    const SI2_COLS = [16.75, 35.74, 111.7, 182.92, 344.35, 372.84, 425.06, 444.05, 472.54, 529.52, 586.49];
+    p2 += tableGrid(SI2_COLS, 93.16, ROWH2, chunk.length, false);
+
+    chunk.forEach((c,i) => {
+      const y = ROW02 + i*ROWH2;
+      const rowNo = chunks.slice(0,pageIdx).reduce((s,ch)=>s+ch.length,0) + i + 1;
+      p2 += T(24.5, y, 6.2, rowNo);
+      p2 += T(51.6, y, 6.2, c.crcf9_container_no||'');
+      p2 += T(113.0, y, 6.2, c.crcf9_seal_no||'');
+      p2 += T(184.2, y, 6.2, itemNameForContainer(c), {w:150, wrap:true});
+      p2 += T(345.6, y, 6.2, c.crcf9_type||'');
+      p2 += T(372.84, y, 6.2, '40', {align:'right', w:49.72});
+      p2 += T(430.9, y, 6.2, c.crcf9_quantity||0, {align:'right', w:10.65});
+      p2 += T(445.4, y, 6.2, 'BALES');
+      p2 += T(506.7, y, 6.2, fmtNum(c.crcf9_n_w||0,0), {align:'right', w:20.32});
+      p2 += T(567.6, y, 6.2, fmtNum(c.crcf9_t_w||0,0), {align:'right', w:16.39});
+    });
+
+    if (isLast){
+      const ty = ROW02 + chunk.length*ROWH2 + 3;
+      p2 += LN(16.75, ty-6.3, 569.77, 0.6);
+      p2 += T(399.5, ty, 6.2, '160 M3');
+      p2 += T(430.9, ty, 6.2, t.totalBales, {align:'right', w:10.65});
+      p2 += T(446.9, ty+1, 5.2, 'BALES');
+      p2 += T(505.1, ty, 6.2, fmtNum(t.totalWeightMt*1000,0), {align:'right', w:21.92});
+      p2 += T(562.1, ty, 6.2, fmtNum(totalTw*1000,0), {align:'right', w:21.89});
+      p2 += LN(16.75, ty+13.2, 569.77, 0.6);
+    } else {
+      p2 += T(480, 800, 8.6, '(Continued on next page)', {align:'right', w:100, italic:true});
+    }
+    return p2;
+  });
+
+  buildDocWrap('si', [p1, ...p2pages]);
+}
+function itemNameForContainer(c){
+  const key = c['_crcf9_sale_detail_id_value'] || c.crcf9_sale_detail_id;
+  const items = aggregateItems(currentSi(S.siSino).cr49f_s_iid);
+  const it = items.find(i => i.saleDetailId === key);
+  return it ? it.productName : '';
+}
+
+function buildDocWrap(which, pageBodies){
+  let wrap = document.getElementById('doc-'+which);
+  if (!wrap){
+    wrap = document.createElement('div');
+    wrap.id = 'doc-'+which;
+    wrap.className = 'doc-wrap';
+    wrap.style.display = 'none';
+    document.getElementById('previewArea').appendChild(wrap);
+  }
+  const pageCount = pageBodies.length;
+  wrap.innerHTML = `
+    <div class="preview-toolbar">
+      <span class="pg-info">${pageCount>1 ? `총 ${pageCount}페이지` : '1페이지'}</span>
+      <button class="btn small secondary" onclick="printPage('${which}')">🖨️ PDF保存/印刷 (${pageCount}p)</button>
+    </div>
+    ${pageBodies.map(b => `<div class="a4-page">${b}</div>`).join('')}
+  `;
+  showPreview(which);
+}
+
+
+// ══════════════════════════════════════════════════════
+// デモモード (NA2605-08 実測データ — ログイン不要プレビュー用)
+// ══════════════════════════════════════════════════════
+function loadDemo(){
+  DEMO_MODE = true;
+  setConn('demo', '● デモモード (NA2605-08)');
+  S.booking = {
+    cr49f_bookingid: 'demo-bkg', cr49f_booking_no: 'AMP0550468', cr49f_bl_number: 'AMP0550468', cr49f_invoice_no: 'NA2605-08',
+    cr49f_main_ship_name: 'HAIAN EAST 0QIOFS1NC', crcf9_bl_pol_text: 'YOKOHAMA,JAPAN',
+    cr49f_etd: '2026-06-22', cr49f_eta: '2026-07-10',
+  };
+  S.saleContract = { cr49f_sale_contract_no: 'LRS-2605A1', cr49f_terms_conditions: 'CIF', cr49f_pay_days: 'AT SIGHT', cr49f_pay_cls: 'LC' };
+  S.saleDetails = [
+    { cr49f_sale_detailid: 'sd-onp', cr49f_price: 205, cr49f_quantity: 500 },
+    { cr49f_sale_detailid: 'sd-omg', cr49f_price: 167, cr49f_quantity: 1000 },
+  ];
+  S.carrierCost = { crcf9_cost_per_van_usd: 514, crcf9_cost_per_bl: 0 };
+  S.containers = [
+    { crcf9_container_no:'SEKU6268910', crcf9_seal_no:'M5012717', crcf9_type:'45GP', crcf9_partial_no:'P11', crcf9_quantity:24, crcf9_n_w:23230, crcf9_g_w:23230, crcf9_t_w:3700, crcf9_sale_detail_id:'sd-onp' },
+    { crcf9_container_no:'CAIU9249948', crcf9_seal_no:'M5012120', crcf9_type:'45GP', crcf9_partial_no:'P10', crcf9_quantity:23, crcf9_n_w:24620, crcf9_g_w:24620, crcf9_t_w:3780, crcf9_sale_detail_id:'sd-onp' },
+    { crcf9_container_no:'TCNU3486289', crcf9_seal_no:'M5012730', crcf9_type:'45GP', crcf9_partial_no:'P11', crcf9_quantity:24, crcf9_n_w:23360, crcf9_g_w:23360, crcf9_t_w:3700, crcf9_sale_detail_id:'sd-onp' },
+    { crcf9_container_no:'TCNU6737881', crcf9_seal_no:'M5012187', crcf9_type:'45GP', crcf9_partial_no:'P10', crcf9_quantity:23, crcf9_n_w:24730, crcf9_g_w:24730, crcf9_t_w:3840, crcf9_sale_detail_id:'sd-omg' },
+  ];
+  S.siList = [{
+    cr49f_s_iid: 'si-1', crcf9_sino: 1,
+    cr49f_lc_no: 'ILC9162600102 DATED ON MAY 8, 2026',
+    cr49f_payment_terms: 'CIF JAKARTA, INDONESIA INCLUDING THC IN JAKARTA PORT (DESTINATION)',
+    crcf9_consignee: 'PT ASPEX KUMBONG\nWISMA KORINDO 11TH FL  JL. M.T HARYONO KAV. 62, JAKARTA SELATAN, **',
+    crcf9_notify_party: 'PT ASPEX KUMBONG',
+    crcf9_address: 'WISMA KORINDO 11TH FLOOR, JL. M.T HARYONO KAV. 62, JAKARTA SELATAN, INDONESIA 12780 , TAX ID NUMBER 0010 6013 8309 2000',
+    crcf9_tel: 'TEL: 62-21-797-5959 ', crcf9_fax: 'FAX: 62-21-797-6407',
+    crcf9_place_of_delivery_1: 'TANJUNG PRIOK PORT, JAKARTA, INDONESIA',
+    crcf9_pod_bl1: 'TANJUNG PRIOK PORT, JAKARTA, INDONESIA',
+    crcf9_bl_text1: 'IMPORT LICENCE NO.04.PI-05.25.3759 DATED ON DECEMBER 18, 2025.',
+    crcf9_bl_text2: '**INDONESIA 12780, TEL: 62-21-797-5959 , FAX: 62-21-797-6407, TAX ID NUMBER 0010 6013 8309 2000\n',
+    crcf9_shipping_mark: null,
+  }];
+  S.siDetailCache = { 'si-1': [
+    { crcf9_productname:'WASTEPAPER FOR NEWSPRINT MANUFACTURING(ONP)', crcf9_hs_code:'HS CODE 4707 30 00 FOR ONP', crcf9_price:205, crcf9_sale_detail_id:'sd-onp' },
+    { crcf9_productname:'WASTEPAPER FOR NEWSPRINT MANUFACTURING(OMG)', crcf9_hs_code:'HS CODE 4707 30 00 FOR OMG', crcf9_price:167, crcf9_sale_detail_id:'sd-omg' },
+  ]};
+  S.ivSino = 1; S.siSino = 1;
+  document.getElementById('invoiceInput').value = 'NA2605-08';
+  renderSummary();
+  renderSinoSelectors();
+  document.getElementById('resultArea').style.display = 'block';
+  showMain();
+}
+
+// ══════════════════════════════════════════════════════
+// 起動
+// ══════════════════════════════════════════════════════
+window.addEventListener('load', async () => {
+  const handled = await handleCallback();
+  if (!handled) { /* ログイン画面のまま */ }
+});
+</script>
+</body>
+</html>
