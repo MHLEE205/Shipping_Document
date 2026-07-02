@@ -313,7 +313,7 @@ async function searchInvoice(){
     // 1. booking
     const bkgRes = await dvGet(`cr49f_bookings?$filter=cr49f_invoice_no eq '${invNo}'` +
       `&$select=cr49f_bookingid,cr49f_booking_no,cr49f_bl_number,cr49f_main_ship_name,crcf9_bl_pol_text,cr49f_etd,cr49f_eta,` +
-      `cr49f_invoice_no,cr49f_sale_contract_id,cr49f_carrier_cost_id`);
+      `cr49f_invoice_no,_cr49f_sale_contract_id_value,_cr49f_carrier_cost_id_value`);
     if (!bkgRes.value || !bkgRes.value.length) throw new Error(`Invoice No. "${invNo}" のブッキングが見つかりません`);
     S.booking = bkgRes.value[0];
 
