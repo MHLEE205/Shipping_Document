@@ -360,7 +360,7 @@ async function searchInvoice(){
       dvGet(`cr49f_sale_details?$filter=_cr49f_sale_contract_id_value eq ${contractId}&$select=cr49f_sale_detailid,cr49f_item_id,cr49f_price,cr49f_quantity`),
       dvGet(`cr49f_s_is?$filter=_cr49f_sale_contract_id_value eq ${contractId}&$orderby=crcf9_sino asc`),
       dvGet(`crcf9_container_informations?$filter=_crcf9_sale_contract_id_value eq ${contractId}` +
-        `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,crcf9_sale_detail_id,crcf9_item_id,crcf9_booking_id`),
+        `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,crcf9_sale_detail_id,crcf9_item_id`),
       S.booking.cr49f_carrier_cost_id
         ? dvGet(`crcf9_carrier_costs(${S.booking.cr49f_carrier_cost_id})?$select=crcf9_cost_per_van_usd,crcf9_cost_per_bl,crcf9_carrier_name`)
         : Promise.resolve(null),
@@ -371,7 +371,10 @@ async function searchInvoice(){
     S.siList = siRes.value || [];
     // sale_contract로 조회한 컨테이너를 현재 booking GUID로 재필터
     const allContainers = ctRes.value || [];
-    S.containers = allContainers.filter(c => c.crcf9_booking_id === S.booking.cr49f_bookingid);
+    // OData API 응답에서 lookup 필드는 _xxx_value 형식으로 반환됨
+    S.containers = allContainers.filter(c =>
+      (c['_crcf9_booking_id_value'] || c.crcf9_booking_id) === S.booking.cr49f_bookingid
+    );
     S.carrierCost = ccRes;
 
     if (!S.siList.length) throw new Error('この販売契約にS/Iレコードがありません');
