@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.8</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.10</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -89,7 +89,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
 
 /* 좌우 분할 레이아웃 */
 .app-layout { display: flex; gap: 20px; align-items: flex-start; }
-.ctrl-col { flex: 0 0 420px; min-width: 320px; }
+.ctrl-col { flex: 0 0 630px; min-width: 420px; }
 .preview-col { flex: 1; min-width: 0; position: sticky; top: 70px; max-height: calc(100vh - 90px); overflow-y: auto; }
 @media (max-width: 900px) { .app-layout { flex-direction: column; } .ctrl-col { flex: none; width: 100%; } }
 .a4-page {
@@ -122,7 +122,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.8</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.10</div>
     </div>
   </div>
   <div class="header-status">
@@ -359,7 +359,7 @@ async function searchInvoice(){
       dvGet(`cr49f_sale_contracts(${contractId})?$select=cr49f_sale_contract_no,cr49f_terms_conditions,cr49f_pay_days,cr49f_pay_cls`),
       dvGet(`cr49f_sale_details?$filter=_cr49f_sale_contract_id_value eq ${contractId}&$select=cr49f_sale_detailid,cr49f_item_id,cr49f_price,cr49f_quantity`),
       dvGet(`cr49f_s_is?$filter=_cr49f_sale_contract_id_value eq ${contractId}&$orderby=crcf9_sino asc`),
-      dvGet(`crcf9_container_informations?$filter=_crcf9_booking_id_value eq ${S.booking.cr49f_bookingid}` +
+      dvGet(`crcf9_container_informations?$filter=crcf9_booking_id eq ${S.booking.cr49f_bookingid}` +
         `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,crcf9_sale_detail_id,crcf9_item_id`),
       S.booking['_cr49f_carrier_cost_id_value'] || S.booking.cr49f_carrier_cost_id
         ? dvGet(`crcf9_carrier_costs(${S.booking['_cr49f_carrier_cost_id_value']||S.booking.cr49f_carrier_cost_id})?$select=crcf9_cost_per_van_usd,crcf9_cost_per_bl,crcf9_carrier_name`)
@@ -553,11 +553,11 @@ function headerBlockCommon(kind, si, b, sc){
   const isPl = kind === 'pl';
   const labelX = isPl ? 368.6 : 357.1;
   const Y = isPl
-    ? { seller:47.3, exporter:57.6, leenear:53.0, addr1:67.0, addr2:78.2, phoneFax:104.7, faxX:215.1,
-        buyer:116.9, importer:127.3, buyerName:122.6, buyerAddr1:136.6,
-        tel:191.5, telFaxX:215.1, tradeTerm:217.5, tradeTermV:218.8, lcNo:244.1, lcNoV:244.6, shipMark:261.3,
-        date:50.7, invNo:64.3, contNo:78.0,
-        pay:99.1, payV:100.4, ship:126.4, bl:147.9, etd:170.2, eta:191.3, from:208.9, to:252.0 }
+    ? { seller:32.7, exporter:43.1, leenear:38.4, addr1:51.7, addr2:62.0, phoneFax:90.1, faxX:209.3,
+        buyer:107.7, importer:118.0, buyerName:104.1, buyerAddr1:131.3,
+        tel:193.0, telFaxX:209.3, tradeTerm:217.3, tradeTermV:218.6, lcNo:243.8, lcNoV:244.3, shipMark:261.3,
+        date:36.1, invNo:49.7, contNo:63.4,
+        pay:84.5, payV:85.8, ship:107.5, bl:129.0, etd:151.3, eta:172.4, from:194.3, to:237.4 }
     : { seller:32.7, exporter:43.1, leenear:38.4, addr1:51.7, addr2:62.0, phoneFax:90.1, faxX:209.3,
         buyer:107.7, importer:118.0, buyerName:104.1, buyerAddr1:131.3,
         tel:193.0, telFaxX:209.3, tradeTerm:217.3, tradeTermV:218.6, lcNo:243.8, lcNoV:244.3, shipMark:261.3,
@@ -569,7 +569,7 @@ function headerBlockCommon(kind, si, b, sc){
   const logoY = isPl ? 10.0 : 10.0;
   const logoH = 22.0;
   h += IMGEL(17.0, logoY, 118.0, logoH, LOGO_SRC);
-  h += T(300, isPl?39.0:22.0, 11.5, isPl?'PACKING LIST':'COMMERCIAL INVOICE', {bold:true, italic:!isPl, align:'right', w:286});
+  h += T(300, 22.0, 11.5, isPl?'PACKING LIST':'COMMERCIAL INVOICE', {bold:true, italic:!isPl, align:'right', w:286});
 
   const VX = 67.5; // 값 컬럼 x — 원본 63.6에서 살짝 오른쪽으로 이동해 라벨과의 간격 확보
   h += T(17.0, Y.seller+2.8, 8.6, 'Seller', {bold:true});
@@ -679,7 +679,7 @@ function renderPackingList(){
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
   const b = S.booking, sc = S.saleContract;
-  const ROWH = 20.1, ROW0 = 310.8;
+  const ROWH = 20.1, ROW0 = 296.2;
 
   const byDetail = {};
   S.containers.forEach(c => {
@@ -697,20 +697,20 @@ function renderPackingList(){
   const pages = chunks.map((chunk, pageIdx) => {
     const isLast = pageIdx === chunks.length-1;
     let body = headerBlockCommon('pl', si, b, sc);
-    body += T(96.9, 292.1, 7.2, 'DESCRIPTION OF GOODS');
-    body += T(273.2, 287.6, 7.2, 'Partial ');
-    body += T(277.6, 296.8, 7.2, 'NO.');
-    body += T(309.1, 292.1, 7.2, 'Container NO.');
-    body += T(378.6, 292.1, 7.2, 'Seal NO.');
-    body += T(424.5, 292.1, 7.2, 'Bales');
-    body += T(452.9, 287.6, 7.2, 'Net Weight '); body += T(464.9, 296.8, 7.2, '(MT)');
-    body += T(505.0, 287.6, 7.2, 'Gross Weight'); body += T(519.8, 296.8, 7.2, '(MT)');
-    body += T(564.1, 292.1, 7.2, 'Type');
+    body += T(96.9, 281.6, 7.2, 'DESCRIPTION OF GOODS');
+    body += T(273.2, 277.1, 7.2, 'Partial ');
+    body += T(277.6, 286.3, 7.2, 'NO.');
+    body += T(309.1, 281.6, 7.2, 'Container NO.');
+    body += T(378.6, 281.6, 7.2, 'Seal NO.');
+    body += T(424.5, 281.6, 7.2, 'Bales');
+    body += T(452.9, 277.1, 7.2, 'Net Weight '); body += T(464.9, 286.3, 7.2, '(MT)');
+    body += T(505.0, 277.1, 7.2, 'Gross Weight'); body += T(519.8, 286.3, 7.2, '(MT)');
+    body += T(564.1, 281.6, 7.2, 'Type');
     if (chunks.length > 1){
       body += T(500, 261.3, 8.6, `(Page ${pageIdx+1}/${chunks.length})`, {align:'right', w:80});
     }
     const PL_COLS = [16.6, 267.8, 300.1, 366.1, 419.2, 447.2, 498.1, 557.0, 586.4];
-    body += tableGrid(PL_COLS, 284.1, ROWH, chunk.length);
+    body += tableGrid(PL_COLS, 269.5, ROWH, chunk.length);
 
     chunk.forEach((row, i) => {
       const y = ROW0 + i*ROWH;
