@@ -359,8 +359,8 @@ async function searchInvoice(){
       dvGet(`cr49f_sale_contracts(${contractId})?$select=cr49f_sale_contract_no,cr49f_terms_conditions,cr49f_pay_days,cr49f_pay_cls`),
       dvGet(`cr49f_sale_details?$filter=_cr49f_sale_contract_id_value eq ${contractId}&$select=cr49f_sale_detailid,cr49f_item_id,cr49f_price,cr49f_quantity`),
       dvGet(`cr49f_s_is?$filter=_cr49f_sale_contract_id_value eq ${contractId}&$orderby=crcf9_sino asc`),
-      dvGet(`crcf9_container_informations?$filter=crcf9_booking_id eq ${S.booking.cr49f_bookingid}` +
-        `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,crcf9_sale_detail_id,crcf9_item_id`),
+      dvGet(`crcf9_container_informations?$filter=_crcf9_sale_contract_id_value eq ${contractId}` +
+        `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,crcf9_sale_detail_id,crcf9_item_id,crcf9_booking_id`),
       S.booking['_cr49f_carrier_cost_id_value'] || S.booking.cr49f_carrier_cost_id
         ? dvGet(`crcf9_carrier_costs(${S.booking['_cr49f_carrier_cost_id_value']||S.booking.cr49f_carrier_cost_id})?$select=crcf9_cost_per_van_usd,crcf9_cost_per_bl,crcf9_carrier_name`)
         : Promise.resolve(null),
@@ -369,7 +369,9 @@ async function searchInvoice(){
     S.saleContract = scRes;
     S.saleDetails = sdRes.value || [];
     S.siList = siRes.value || [];
-    S.containers = ctRes.value || [];
+    // sale_contract로 조회한 컨테이너를 현재 booking GUID로 재필터
+    const allContainers = ctRes.value || [];
+    S.containers = allContainers.filter(c => c.crcf9_booking_id === S.booking.cr49f_bookingid);
     S.carrierCost = ccRes;
 
     if (!S.siList.length) throw new Error('この販売契約にS/Iレコードがありません');
