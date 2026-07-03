@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.22</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.23</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -122,7 +122,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.22</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.23</div>
     </div>
   </div>
   <div class="header-status">
@@ -639,9 +639,9 @@ function renderInvoice(){
   let body = headerBlockCommon('invoice', si, b, sc);
   body += T(115.2, 283.9, 7.2, 'DESCRIPTION OF GOODS');
   body += T(320.8, 283.9, 7.2, 'Bales');
-  body += T(377.8, 279.3, 7.2, 'Weight'); body += T(382.8, 288.5, 7.2, '(MT)');
-  body += T(445.9, 279.3, 7.2, 'Unit Price'); body += T(446.1, 288.5, 7.2, '(US$/MT)');
-  body += T(522.4, 279.3, 7.2, 'CIF Amount'); body += T(533.3, 288.5, 7.2, '(US$)');
+  body += T(377.8, 279.3, 7.2, 'Weight'); body += T(382.8, 286.0, 7.2, '(MT)');
+  body += T(445.9, 279.3, 7.2, 'Unit Price'); body += T(446.1, 286.0, 7.2, '(US$/MT)');
+  body += T(522.4, 279.3, 7.2, 'CIF Amount'); body += T(533.3, 286.0, 7.2, '(US$)');
   const IV_COLS = [16.6, 304.4, 354.6, 426.4, 498.1, 586.4];
   body += tableGrid(IV_COLS, 293.03, ROWH, items.length);
 
