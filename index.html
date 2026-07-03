@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.24</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.26</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -122,7 +122,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.24</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.26</div>
     </div>
   </div>
   <div class="header-status">
@@ -634,16 +634,16 @@ function renderInvoice(){
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
   const b = S.booking, sc = S.saleContract;
-  const ROWH = 20.09, ROW0 = 293.03;  // 실물 PDF 실측값
+  const ROWH = 20.09, ROW0 = 293.03;  // 실물 PDF 실측값 (데이터행 시작)
 
   let body = headerBlockCommon('invoice', si, b, sc);
-  body += T(115.2, 275.3, 7.2, 'DESCRIPTION OF GOODS');
-  body += T(320.8, 275.3, 7.2, 'Bales');
-  body += T(377.8, 271.9, 7.2, 'Weight'); body += T(382.8, 278.6, 7.2, '(MT)');
-  body += T(445.9, 271.9, 7.2, 'Unit Price'); body += T(446.1, 278.6, 7.2, '(US$/MT)');
-  body += T(522.4, 271.9, 7.2, 'CIF Amount'); body += T(533.3, 278.6, 7.2, '(US$)');
+  body += T(115.2, 283.9, 7.2, 'DESCRIPTION OF GOODS');
+  body += T(320.8, 283.9, 7.2, 'Bales');
+  body += T(377.8, 279.3, 7.2, 'Weight'); body += T(382.8, 288.5, 7.2, '(MT)');
+  body += T(445.9, 279.3, 7.2, 'Unit Price'); body += T(446.1, 288.5, 7.2, '(US$/MT)');
+  body += T(522.4, 279.3, 7.2, 'CIF Amount'); body += T(533.3, 288.5, 7.2, '(US$)');
   const IV_COLS = [16.6, 304.4, 354.6, 426.4, 498.1, 586.4];
-  body += tableGrid(IV_COLS, 293.03, ROWH, items.length);
+  body += tableGrid(IV_COLS, 272.94, ROWH, items.length);
 
   items.forEach((it,i) => {
     const y = ROW0 + i*ROWH;
@@ -703,13 +703,13 @@ function renderPackingList(){
     const isLast = pageIdx === chunks.length-1;
     let body = headerBlockCommon('pl', si, b, sc);
     body += T(96.9, 297.5, 7.2, 'DESCRIPTION OF GOODS');
-    body += T(273.2, 293.9, 7.2, 'Partial ');
-    body += T(277.6, 303.1, 7.2, 'NO.');
+    body += T(273.2, 294.1, 7.2, 'Partial ');
+    body += T(277.6, 300.8, 7.2, 'NO.');
     body += T(309.1, 297.5, 7.2, 'Container NO.');
     body += T(378.6, 297.5, 7.2, 'Seal NO.');
     body += T(424.5, 297.5, 7.2, 'Bales');
-    body += T(452.9, 293.9, 7.2, 'Net Weight '); body += T(464.9, 303.1, 7.2, '(MT)');
-    body += T(505.0, 293.9, 7.2, 'Gross Weight'); body += T(519.8, 303.1, 7.2, '(MT)');
+    body += T(452.9, 294.1, 7.2, 'Net Weight '); body += T(464.9, 300.8, 7.2, '(MT)');
+    body += T(505.0, 294.1, 7.2, 'Gross Weight'); body += T(519.8, 300.8, 7.2, '(MT)');
     body += T(564.1, 297.5, 7.2, 'Type');
     if (chunks.length > 1){
       body += T(500, 261.3, 8.6, `(Page ${pageIdx+1}/${chunks.length})`, {align:'right', w:80});
