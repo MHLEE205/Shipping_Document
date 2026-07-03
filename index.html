@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.26</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.27</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -122,7 +122,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.26</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.27</div>
     </div>
   </div>
   <div class="header-status">
@@ -646,7 +646,7 @@ function renderInvoice(){
   body += tableGrid(IV_COLS, 272.94, ROWH, items.length);
 
   items.forEach((it,i) => {
-    const y = ROW0 + i*ROWH;
+    const y = ROW0 + i*ROWH + 2.0;  // 실측: 행 상단에서 +2pt 내려서 여유 확보
     body += T(18.4, y, 7.2, it.productName);
     body += T(304.4, y, 7.2, it.bales, {align:'right', w:47.7});
     body += T(354.6, y, 7.2, fmtNum(it.weightMt), {align:'right', w:69.3});
@@ -655,10 +655,10 @@ function renderInvoice(){
   });
   const totalY = ROW0 + items.length*ROWH;
   body += LN(16.6, totalY-8.8, 570.49, 0.6);
-  body += T(18.4, totalY, 7.2, 'TOTAL');
-  body += T(304.4, totalY, 7.2, t.totalBales, {align:'right', w:47.7});
-  body += T(354.6, totalY, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:69.3});
-  body += T(498.1, totalY, 7.2, fmtNum(t.cifTotal), {align:'right', w:85.8});
+  body += T(18.4, totalY+2.0, 7.2, 'TOTAL');
+  body += T(304.4, totalY+2.0, 7.2, t.totalBales, {align:'right', w:47.7});
+  body += T(354.6, totalY+2.0, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:69.3});
+  body += T(498.1, totalY+2.0, 7.2, fmtNum(t.cifTotal), {align:'right', w:85.8});
   body += LN(16.6, totalY+13.4, 570.49, 0.6);
 
   body += T(27.8, totalY+17.9, 8.6, 'COUNTRY OF ORIGIN :');
@@ -718,7 +718,7 @@ function renderPackingList(){
     body += tableGrid(PL_COLS, 287.53, ROWH, chunk.length);
 
     chunk.forEach((row, i) => {
-      const y = ROW0 + i*ROWH;
+      const y = ROW0 + i*ROWH + 2.0;  // 실측: 행 상단에서 +2pt
       const nw = (row.c.crcf9_n_w||0)/1000, gw = (row.c.crcf9_g_w||row.c.crcf9_n_w||0)/1000;
       const rowNo = chunks.slice(0,pageIdx).reduce((s,c)=>s+c.length,0) + i + 1;
       body += T(23.8, y, 7.2, rowNo);
