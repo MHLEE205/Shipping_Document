@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.13</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.14</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -122,7 +122,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.13</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.14</div>
     </div>
   </div>
   <div class="header-status">
@@ -337,14 +337,14 @@ async function searchInvoice(){
   try{
     // 1. booking
     const bkgRes = await dvGet(`cr49f_bookings?$filter=cr49f_invoice_no eq '${invNo}'` +
-      `&$select=cr49f_bookingid,cr49f_booking_no,cr49f_bl_number,cr49f_main_ship_name,cr49f_region_japan_id,cr49f_etd,cr49f_eta,` +
-      `cr49f_invoice_no,_cr49f_sale_contract_id_value,cr49f_carrier_cost_id,crcf9_delivery_location`);
+      `&$select=cr49f_bookingid,cr49f_booking_no,cr49f_bl_number,cr49f_main_ship_name,cr49f_etd,cr49f_eta,` +
+      `cr49f_invoice_no,_cr49f_sale_contract_id_value,_cr49f_carrier_cost_id_value,_cr49f_region_japan_id_value,crcf9_delivery_location`);
     if (!bkgRes.value || !bkgRes.value.length) throw new Error(`Invoice No. "${invNo}" のブッキングが見つかりません`);
     S.booking = bkgRes.value[0];
 
     // region_japan 정보 로드 (POL 정보 필요)
-    // compass_mapping_1 실측: booking의 cr49f_region_japan_id 는 GUID 직접 반환
-    const regionJapanId = S.booking.cr49f_region_japan_id;
+    // compass_mapping_1 실측: lookup 필드는 OData 응답에서 _xxx_value 형식으로 반환
+    const regionJapanId = S.booking['_cr49f_region_japan_id_value'];
     if (regionJapanId) {
       try {
         const rjRes = await dvGet(`crcf9_region_japans(${regionJapanId})?$select=crcf9_pol`);
@@ -361,8 +361,8 @@ async function searchInvoice(){
       dvGet(`cr49f_s_is?$filter=_cr49f_sale_contract_id_value eq ${contractId}&$orderby=crcf9_sino asc`),
       dvGet(`crcf9_container_informations?$filter=_crcf9_booking_id_value eq ${S.booking.cr49f_bookingid}` +
         `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,_crcf9_sale_detail_id_value`),
-      S.booking.cr49f_carrier_cost_id
-        ? dvGet(`crcf9_carrier_costs(${S.booking.cr49f_carrier_cost_id})?$select=crcf9_cost_per_van_usd,crcf9_cost_per_bl,crcf9_carrier_name`)
+      S.booking['_cr49f_carrier_cost_id_value']
+        ? dvGet(`crcf9_carrier_costs(${S.booking['_cr49f_carrier_cost_id_value']})?$select=crcf9_cost_per_van_usd,crcf9_cost_per_bl,crcf9_carrier_name`)
         : Promise.resolve(null),
     ]);
 
@@ -629,16 +629,17 @@ function renderInvoice(){
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
   const b = S.booking, sc = S.saleContract;
+  // 헤더 높이 1.5배: 테이블 상단선 255.5, ROW0 296.2 (헤더=40.7pt)
   const ROWH = 20.1, ROW0 = 296.2;
 
   let body = headerBlockCommon('invoice', si, b, sc);
-  body += T(115.2, 281.6, 7.2, 'DESCRIPTION OF GOODS');
-  body += T(320.8, 281.6, 7.2, 'Bales');
-  body += T(377.8, 276.5, 7.2, 'Weight'); body += T(382.8, 285.6, 7.2, '(MT)');
-  body += T(445.9, 276.5, 7.2, 'Unit Price'); body += T(446.1, 285.6, 7.2, '(US$/MT)');
-  body += T(522.4, 276.5, 7.2, 'CIF Amount'); body += T(533.3, 285.6, 7.2, '(US$)');
+  body += T(115.2, 271.0, 7.2, 'DESCRIPTION OF GOODS');
+  body += T(320.8, 271.0, 7.2, 'Bales');
+  body += T(377.8, 265.0, 7.2, 'Weight'); body += T(382.8, 276.0, 7.2, '(MT)');
+  body += T(445.9, 265.0, 7.2, 'Unit Price'); body += T(446.1, 276.0, 7.2, '(US$/MT)');
+  body += T(522.4, 265.0, 7.2, 'CIF Amount'); body += T(533.3, 276.0, 7.2, '(US$)');
   const IV_COLS = [16.6, 304.4, 354.6, 426.4, 498.1, 586.4];
-  body += tableGrid(IV_COLS, 269.5, ROWH, items.length);
+  body += tableGrid(IV_COLS, 255.5, ROWH, items.length);
 
   items.forEach((it,i) => {
     const y = ROW0 + i*ROWH;
@@ -697,20 +698,20 @@ function renderPackingList(){
   const pages = chunks.map((chunk, pageIdx) => {
     const isLast = pageIdx === chunks.length-1;
     let body = headerBlockCommon('pl', si, b, sc);
-    body += T(96.9, 281.6, 7.2, 'DESCRIPTION OF GOODS');
-    body += T(273.2, 277.1, 7.2, 'Partial ');
-    body += T(277.6, 286.3, 7.2, 'NO.');
-    body += T(309.1, 281.6, 7.2, 'Container NO.');
-    body += T(378.6, 281.6, 7.2, 'Seal NO.');
-    body += T(424.5, 281.6, 7.2, 'Bales');
-    body += T(452.9, 277.1, 7.2, 'Net Weight '); body += T(464.9, 286.3, 7.2, '(MT)');
-    body += T(505.0, 277.1, 7.2, 'Gross Weight'); body += T(519.8, 286.3, 7.2, '(MT)');
-    body += T(564.1, 281.6, 7.2, 'Type');
+    body += T(96.9, 271.0, 7.2, 'DESCRIPTION OF GOODS');
+    body += T(273.2, 266.5, 7.2, 'Partial ');
+    body += T(277.6, 276.0, 7.2, 'NO.');
+    body += T(309.1, 271.0, 7.2, 'Container NO.');
+    body += T(378.6, 271.0, 7.2, 'Seal NO.');
+    body += T(424.5, 271.0, 7.2, 'Bales');
+    body += T(452.9, 266.5, 7.2, 'Net Weight '); body += T(464.9, 276.0, 7.2, '(MT)');
+    body += T(505.0, 266.5, 7.2, 'Gross Weight'); body += T(519.8, 276.0, 7.2, '(MT)');
+    body += T(564.1, 271.0, 7.2, 'Type');
     if (chunks.length > 1){
       body += T(500, 261.3, 8.6, `(Page ${pageIdx+1}/${chunks.length})`, {align:'right', w:80});
     }
     const PL_COLS = [16.6, 267.8, 300.1, 366.1, 419.2, 447.2, 498.1, 557.0, 586.4];
-    body += tableGrid(PL_COLS, 269.5, ROWH, chunk.length);
+    body += tableGrid(PL_COLS, 255.5, ROWH, chunk.length);
 
     chunk.forEach((row, i) => {
       const y = ROW0 + i*ROWH;
