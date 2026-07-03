@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.19</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.20</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -122,7 +122,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.19</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.20</div>
     </div>
   </div>
   <div class="header-status">
@@ -582,10 +582,8 @@ function headerBlockCommon(kind, si, b, sc){
   h += T(VX, Y.leenear+2.8, 8.6, 'LEENEAR CORPORATION');
   h += T(VX, Y.addr1, 8.6, 'VORT SUIDOBASHI 3 5FL, 2-8-11 KANDASARUGAKUCHO, CHIYODA, ');
   h += T(VX, Y.addr2, 8.6, 'TOKYO, JAPAN, 101-0064');
-  const sellerTel = (si.crcf9_shipper_tel || 'TEL : +81-3-3528-9850').replace(/^PHONE:\s*/i, 'TEL : ');
-  const sellerFax = (si.crcf9_shipper_fax || 'FAX : +81-3-3528-9851').replace(/^PHONE:\s*/i, 'FAX : ');
-  h += T(VX, Y.phoneFax, 8.6, sellerTel);
-  h += T(Y.faxX+4, Y.phoneFax, 8.6, sellerFax);
+  h += T(VX, Y.phoneFax, 8.6, si.crcf9_shipper_tel || 'TEL : +81-3-3528-9850');
+  h += T(Y.faxX+4, Y.phoneFax, 8.6, si.crcf9_shipper_fax || 'FAX : +81-3-3528-9851');
 
   h += T(17.0, Y.buyer+2.8, 8.6, 'Buyer', {bold:true});
   h += T(20.4, Y.importer+2.8, 8.6, '/ Importer', {bold:true});
@@ -639,11 +637,11 @@ function renderInvoice(){
   const ROWH = 20.1, ROW0 = 296.2;
 
   let body = headerBlockCommon('invoice', si, b, sc);
-  body += T(115.2, 281.6, 7.2, 'DESCRIPTION OF GOODS');
-  body += T(320.8, 281.6, 7.2, 'Bales');
-  body += T(377.8, 276.5, 7.2, 'Weight'); body += T(382.8, 285.6, 7.2, '(MT)');
-  body += T(445.9, 276.5, 7.2, 'Unit Price'); body += T(446.1, 285.6, 7.2, '(US$/MT)');
-  body += T(522.4, 276.5, 7.2, 'CIF Amount'); body += T(533.3, 285.6, 7.2, '(US$)');
+  body += T(115.2, 254.5, 7.2, 'DESCRIPTION OF GOODS');
+  body += T(320.8, 254.5, 7.2, 'Bales');
+  body += T(377.8, 249.5, 7.2, 'Weight'); body += T(382.8, 258.0, 7.2, '(MT)');
+  body += T(445.9, 249.5, 7.2, 'Unit Price'); body += T(446.1, 258.0, 7.2, '(US$/MT)');
+  body += T(522.4, 249.5, 7.2, 'CIF Amount'); body += T(533.3, 258.0, 7.2, '(US$)');
   const IV_COLS = [16.6, 304.4, 354.6, 426.4, 498.1, 586.4];
   body += tableGrid(IV_COLS, 269.5, ROWH, items.length);
 
@@ -704,15 +702,15 @@ function renderPackingList(){
   const pages = chunks.map((chunk, pageIdx) => {
     const isLast = pageIdx === chunks.length-1;
     let body = headerBlockCommon('pl', si, b, sc);
-    body += T(96.9, 281.6, 7.2, 'DESCRIPTION OF GOODS');
-    body += T(273.2, 277.1, 7.2, 'Partial ');
-    body += T(277.6, 286.3, 7.2, 'NO.');
-    body += T(309.1, 281.6, 7.2, 'Container NO.');
-    body += T(378.6, 281.6, 7.2, 'Seal NO.');
-    body += T(424.5, 281.6, 7.2, 'Bales');
-    body += T(452.9, 277.1, 7.2, 'Net Weight '); body += T(464.9, 286.3, 7.2, '(MT)');
-    body += T(505.0, 277.1, 7.2, 'Gross Weight'); body += T(519.8, 286.3, 7.2, '(MT)');
-    body += T(564.1, 281.6, 7.2, 'Type');
+    body += T(96.9, 254.5, 7.2, 'DESCRIPTION OF GOODS');
+    body += T(273.2, 249.5, 7.2, 'Partial ');
+    body += T(277.6, 258.0, 7.2, 'NO.');
+    body += T(309.1, 254.5, 7.2, 'Container NO.');
+    body += T(378.6, 254.5, 7.2, 'Seal NO.');
+    body += T(424.5, 254.5, 7.2, 'Bales');
+    body += T(452.9, 249.5, 7.2, 'Net Weight '); body += T(464.9, 258.0, 7.2, '(MT)');
+    body += T(505.0, 249.5, 7.2, 'Gross Weight'); body += T(519.8, 258.0, 7.2, '(MT)');
+    body += T(564.1, 254.5, 7.2, 'Type');
     if (chunks.length > 1){
       body += T(500, 261.3, 8.6, `(Page ${pageIdx+1}/${chunks.length})`, {align:'right', w:80});
     }
@@ -797,8 +795,8 @@ function renderSI(){
   p1 += T(19.6, 12.4, 5.2, 'SHIPPER');
   p1 += T(19.6, 25.0, 7.2, 'LEENEAR CORPORATION');
   p1 += T(19.6, 35.9, 7.2, 'VORT SUIDOBASHI 3 5FL, 2-8-11 KANDASARUGAKUCHO, CHIYODA, TOKYO, JAPAN, 101-0064', {w:340, wrap:true});
-  p1 += T(19.6, 65.4, 7.2, (si.crcf9_shipper_tel || 'TEL : +81-3-3528-9850').replace(/^PHONE:\s*/i, 'TEL : '));
-  p1 += T(193.9, 65.4, 7.2, (si.crcf9_shipper_fax || 'FAX : +81-3-3528-9851').replace(/^PHONE:\s*/i, 'FAX : '));
+  p1 += T(19.6, 65.4, 7.2, si.crcf9_shipper_tel || 'TEL : +81-3-3528-9850');
+  p1 += T(193.9, 65.4, 7.2, si.crcf9_shipper_fax || 'FAX : +81-3-3528-9851');
   p1 += T(370.9, 12.4, 5.2, 'BOOKING NUMBER');
   p1 += T(487.9, 11.2, 7.2, b.cr49f_booking_no||'');
   p1 += T(391.0, 54.5, 13.5, 'SHIPPING INSTRUCTION', {bold:true});
