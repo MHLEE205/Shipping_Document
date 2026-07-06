@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.28</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.29</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -123,7 +123,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.28</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.29</div>
     </div>
   </div>
   <div class="header-status">
@@ -510,90 +510,131 @@ async function downloadExcel(){
     const cnts = S.containers;
     const pol  = getPol(b);
 
-    const fmt  = d => d ? (d instanceof Date ? d : new Date(d)).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'/') : '';
-    const today= new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'/');
+    // Excel シリアル日付変換 (1899-12-30 基準)
+    const toSerial = (d) => {
+      if (!d) return null;
+      const dt = d instanceof Date ? d : new Date(d);
+      if (isNaN(dt.getTime())) return null;
+      const epoch = new Date(Date.UTC(1899, 11, 30));
+      return (dt.getTime() - epoch.getTime()) / 86400000;
+    };
+    const todaySerial = toSerial(new Date());
+
+    // セル書き込みヘルパー: 文字列
+    const setStr = (ws, cell, val) => {
+      const v = val || '';
+      if (ws[cell]) { ws[cell].v = v; ws[cell].t = 's'; delete ws[cell].w; }
+      else { ws[cell] = {t:'s', v:v}; }
+    };
+    // セル書き込みヘルパー: 数値
+    const setNum = (ws, cell, val) => {
+      const v = (val === null || val === undefined || val === '') ? 0 : Number(val);
+      if (ws[cell]) { ws[cell].v = v; ws[cell].t = 'n'; delete ws[cell].w; }
+      else { ws[cell] = {t:'n', v:v}; }
+    };
+    // セル書き込みヘルパー: 日付 (シリアル番号, 既存フォーマット維持)
+    const setDate = (ws, cell, serial) => {
+      if (serial === null) return;
+      if (ws[cell]) { ws[cell].v = serial; ws[cell].t = 'n'; delete ws[cell].w; }
+      else { ws[cell] = {t:'n', v:serial, z:'yyyy/mm/dd'}; }
+    };
+
+    // TEL/FAX 重複防止処理
+    const telVal = (si.crcf9_tel||'').replace(/^TEL:\s*/i,'').trim();
+    const faxVal = (si.crcf9_fax||'').replace(/^FAX:\s*/i,'').trim();
+    const telFaxStr = (telVal ? 'TEL:  '+telVal : '') + (faxVal ? '      FAX:  '+faxVal : '');
+
+    // 到着港 (IV&PL共通)
+    const podText = si.crcf9_place_of_delivery_1||'';
 
     // ── 通関IV ──────────────────────────────
     const wsIV = wb.Sheets['通関IV'];
-    const setIV = (cell, val) => { if(wsIV[cell]) wsIV[cell].v=val; else wsIV[cell]={t:'s',v:val}; };
 
-    setIV('I4', today);
-    setIV('I5', b.cr49f_invoice_no||'');
-    setIV('I6', sc.cr49f_sale_contract_no||'');
-    setIV('I7', si.crcf9_payment_deadline||'');
-    setIV('I9', b.cr49f_main_ship_name||'');
-    setIV('J11', b.cr49f_booking_no||'');
-    setIV('J12', b.cr49f_etd ? fmt(b.cr49f_etd) : '');
-    setIV('J13', b.cr49f_eta ? fmt(b.cr49f_eta) : '');
-    // Buyer
-    setIV('E9',  si.crcf9_bl_consignee||'');
-    setIV('E10', si.crcf9_bl_text2||'');
-    setIV('E12', (si.crcf9_tel ? 'TEL: '+si.crcf9_tel : '') + (si.crcf9_fax ? '   FAX: '+si.crcf9_fax : ''));
-    // Trade / Route
-    setIV('E14', sc.cr49f_terms_conditions_full||si.cr49f_payment_terms||'');
-    setIV('I14', pol);
-    setIV('H16', si.crcf9_pod_text||'');
-    setIV('K18', cnts.length);
-    // 品目行 (21行目~)
+    // 日付セル
+    setDate(wsIV, 'I4', todaySerial);
+    setDate(wsIV, 'J12', toSerial(b.cr49f_etd));
+    setDate(wsIV, 'J13', toSerial(b.cr49f_eta));
+
+    // 文字列セル
+    setStr(wsIV, 'I5', b.cr49f_invoice_no||'');
+    setStr(wsIV, 'I6', sc.cr49f_sale_contract_no||'');
+    setStr(wsIV, 'I7', si.crcf9_payment_deadline||si.cr49f_payment_terms||'');
+    setStr(wsIV, 'E9', si.crcf9_consignee||'');           // Buyer 会社名
+    setStr(wsIV, 'I9', b.cr49f_main_ship_name||'');
+    setStr(wsIV, 'E10', si.crcf9_address||'');             // Buyer 住所
+    setStr(wsIV, 'J11', b.cr49f_booking_no||'');
+    setStr(wsIV, 'E12', telFaxStr);                         // TEL/FAX (重複なし)
+    setStr(wsIV, 'E14', sc.cr49f_terms_conditions_full||'');
+    setStr(wsIV, 'I14', pol);
+    setStr(wsIV, 'H16', podText);                          // To (到着港)
+
+    // 数値セル
+    setNum(wsIV, 'K18', cnts.length);
+
+    // 品目行 (21行目) ※FORMAT固定1行
     if (items.length>0){
       const it = items[0];
-      setIV('A21', sc.cr49f_sale_contract_no||'');
-      setIV('D21', it.productName||'');
-      setIV('F21', it.bales);
-      setIV('G21', it.weightMt);
-      setIV('H21', it.price);
-      setIV('J21', it.cifAmount);
+      setStr(wsIV, 'A21', sc.cr49f_sale_contract_no||'');
+      setStr(wsIV, 'D21', it.productName||'');
+      setNum(wsIV, 'F21', it.bales);
+      setNum(wsIV, 'G21', it.weightMt);
+      setNum(wsIV, 'H21', it.price);
+      setNum(wsIV, 'J21', it.cifAmount);
     }
-    // TOTAL (D23)
-    setIV('F23', t.totalBales);
-    setIV('G23', t.totalWeightMt);
-    setIV('J23', t.cifTotal);
-    // FREIGHT / FOB
+    // TOTAL行 (D23固定)
+    setNum(wsIV, 'F23', t.totalBales);
+    setNum(wsIV, 'G23', t.totalWeightMt);
+    setNum(wsIV, 'J23', t.cifTotal);
+
+    // FREIGHT / INSURANCE / FOB
     const freight = S.carrierCost ? (S.carrierCost.crcf9_cost_per_van_usd||0)*cnts.length : 0;
     const ins     = Math.round(t.cifTotal*0.001014);
     const fob     = Math.round((t.cifTotal-freight-ins)*100)/100;
-    setIV('J32', freight);
-    setIV('J33', fob);
+    setNum(wsIV, 'J32', freight);
+    setNum(wsIV, 'J33', fob);
 
     // ── 通関PL ──────────────────────────────
     const wsPL = wb.Sheets['通関PL'];
-    const setPL = (cell, val) => { if(wsPL[cell]) wsPL[cell].v=val; else wsPL[cell]={t:'s',v:val}; };
 
-    setPL('L4', today);
-    setPL('K5', b.cr49f_invoice_no||'');
-    setPL('K6', sc.cr49f_sale_contract_no||'');
-    setPL('K7', si.crcf9_payment_deadline||'');
-    setPL('J9', b.cr49f_main_ship_name||'');
-    setPL('K11', b.cr49f_booking_no||'');
-    setPL('L12', b.cr49f_etd ? fmt(b.cr49f_etd) : '');
-    setPL('L13', b.cr49f_eta ? fmt(b.cr49f_eta) : '');
-    setPL('E9',  si.crcf9_bl_consignee||'');
-    setPL('E10', si.crcf9_bl_text2||'');
-    setPL('E12', (si.crcf9_tel ? 'TEL: '+si.crcf9_tel : '') + (si.crcf9_fax ? '   FAX: '+si.crcf9_fax : ''));
-    setPL('E14', sc.cr49f_terms_conditions_full||si.cr49f_payment_terms||'');
-    setPL('K14', pol);
-    setPL('I16', si.crcf9_pod_text||'');
-    setPL('N18', cnts.length);
+    // 日付セル
+    setDate(wsPL, 'L4', todaySerial);
+    setDate(wsPL, 'L12', toSerial(b.cr49f_etd));
+    setDate(wsPL, 'L13', toSerial(b.cr49f_eta));
 
-    // コンテナ行 (21行目~)
+    // 文字列セル
+    setStr(wsPL, 'K5', b.cr49f_invoice_no||'');
+    setStr(wsPL, 'K6', sc.cr49f_sale_contract_no||'');
+    setStr(wsPL, 'K7', si.crcf9_payment_deadline||si.cr49f_payment_terms||'');
+    setStr(wsPL, 'E9', si.crcf9_consignee||'');            // Buyer 会社名
+    setStr(wsPL, 'J9', b.cr49f_main_ship_name||'');
+    setStr(wsPL, 'E10', si.crcf9_address||'');              // Buyer 住所
+    setStr(wsPL, 'K11', b.cr49f_booking_no||'');
+    setStr(wsPL, 'E12', telFaxStr);                          // TEL/FAX (重複なし)
+    setStr(wsPL, 'E14', sc.cr49f_terms_conditions_full||'');
+    setStr(wsPL, 'K14', pol);
+    setStr(wsPL, 'I16', podText);                           // To (到着港)
+
+    // 数値セル
+    setNum(wsPL, 'N18', cnts.length);
+
+    // コンテナ行 (21行目~24行目, FORMAT固定4行まで)
     const prodName = items[0]?items[0].productName:'';
     cnts.forEach((c, i) => {
+      if (i > 3) return; // FORMAT固定4行まで (D21~D24)
       const row = 21 + i;
       const nw  = (c.crcf9_n_w||0)/1000;
       const gw  = (c.crcf9_g_w||c.crcf9_n_w||0)/1000;
-      setPL(`D${row}`, prodName);
-      setPL(`F${row}`, c.crcf9_container_no||'');
-      setPL(`G${row}`, c.crcf9_seal_no||'');
-      setPL(`I${row}`, c.crcf9_quantity||0);
-      setPL(`J${row}`, nw);
-      setPL(`L${row}`, gw);
+      setStr(wsPL, `D${row}`, prodName);
+      setStr(wsPL, `F${row}`, c.crcf9_container_no||'');
+      setStr(wsPL, `G${row}`, c.crcf9_seal_no||'');
+      setNum(wsPL, `I${row}`, c.crcf9_quantity||0);
+      setNum(wsPL, `J${row}`, nw);
+      setNum(wsPL, `L${row}`, gw);
     });
-    // TOTAL行
-    const totRow = 21 + cnts.length + 1;
-    setPL(`D${totRow}`, 'TOTAL');
-    setPL(`I${totRow}`, t.totalBales);
-    setPL(`J${totRow}`, t.totalWeightMt);
-    setPL(`L${totRow}`, t.totalWeightMt);
+    // TOTAL行 (D25固定 ※FORMAT構造)
+    setNum(wsPL, 'I25', t.totalBales);
+    setNum(wsPL, 'J25', t.totalWeightMt);
+    setNum(wsPL, 'L25', t.totalWeightMt);
 
     // 3) ダウンロード
     const invNo = b.cr49f_invoice_no||'DOCUMENT';
