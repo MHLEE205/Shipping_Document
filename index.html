@@ -104,10 +104,25 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
 .a4-page img.tx { object-fit: contain; }
 
 @media print {
-  body * { visibility: hidden; }
-  .doc-wrap.print-target, .doc-wrap.print-target * { visibility: visible; }
-  .doc-wrap.print-target { position: absolute; top: 0; left: 0; margin: 0; }
-  .doc-wrap.print-target .a4-page { box-shadow: none; margin: 0; page-break-after: always; }
+  /* display ベース制御: 不要な要素を完全非表示 */
+  body > *:not(#mainScreen) { display: none !important; }
+  #mainScreen { display: block !important; background: white !important; padding: 0 !important; }
+  #resultArea { display: block !important; padding: 0 !important; }
+  .app-layout { display: block !important; padding: 0 !important; }
+  .ctrl-col,
+  .preview-toolbar,
+  .app-header,
+  .card,
+  .footer-powered { display: none !important; }
+  .preview-col { display: block !important; padding: 0 !important; margin: 0 !important;
+                  max-height: none !important; overflow: visible !important;
+                  position: static !important; }
+  #previewArea { display: block !important; }
+  /* 全 doc-wrap 非表示、print-target のみ表示 */
+  .doc-wrap { display: none !important; }
+  .doc-wrap.print-target { display: block !important; margin: 0 !important; }
+  .doc-wrap.print-target .preview-toolbar { display: none !important; }
+  .doc-wrap.print-target .a4-page { box-shadow: none !important; margin: 0 !important; page-break-after: always; }
   .doc-wrap.print-target .a4-page:last-child { page-break-after: auto; }
   @page { size: A4; margin: 0; }
 }
@@ -671,9 +686,15 @@ function showPreview(which){
 }
 
 function printPage(which){
-  document.querySelectorAll('.doc-wrap').forEach(el => el.classList.remove('print-target'));
   const el = document.getElementById('doc-'+which);
-  if (el){ el.classList.add('print-target'); window.print(); }
+  if (!el){ alert('先にプレビューを表示してください'); return; }
+  // 全 doc-wrap を非表示 → print-target のみ block
+  document.querySelectorAll('.doc-wrap').forEach(w => {
+    w.classList.remove('print-target');
+    w.style.display = (w === el) ? 'block' : 'none';
+  });
+  el.classList.add('print-target');
+  window.print();
 }
 
 // ══════════════════════════════════════════════════════
