@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.35</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.36</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -142,7 +142,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.35</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.36</div>
     </div>
   </div>
   <div class="header-status">
@@ -850,6 +850,7 @@ function renderInvoice(){
     body += T(498.1, y, 7.2, fmtNum(it.cifAmount), {align:'right', w:85.8});
   });
   const totalY = ROW0 + items.length*ROWH;
+  body += LN(16.6, totalY - 3, 570.49, 0.6);
   body += T(18.4, totalY+2.0, 7.2, 'TOTAL');
   body += T(304.4, totalY+2.0, 7.2, t.totalBales, {align:'right', w:47.7});
   body += T(354.6, totalY+2.0, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:69.3});
@@ -929,6 +930,7 @@ function renderPackingList(){
 
     if (isLast){
       const totalY = ROW0 + chunk.length*ROWH;
+      body += LN(16.65, totalY - 3, 570.49, 0.6);
       body += T(342.6, totalY+2.0, 7.2, `TOTAL   :${S.containers.length}   Containers`);
       body += T(429.1, totalY+2.0, 7.2, t.totalBales, {align:'right', w:15.6});
       body += T(463.3, totalY+2.0, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:30});
