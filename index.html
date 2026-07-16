@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja" data-theme="dark">
 <head>
 <meta charset="UTF-8">
@@ -713,13 +713,23 @@ const SI1_HEADER_LINES = [[586.52, 34.26, 0.52, 155.09], [16.75, 34.26, 0.52, 15
 
 function LNs(arr){ return arr.map(l => LN(l[0], l[1], l[2], l[3])).join(''); }
 // 반복 행 테이블의 전체 격자(헤더 1행 + 데이터 N행)를 그림 — TOTAL 행 테두리는 별도 처리
-function tableGrid(colXs, headerTopY, rowH, nDataRows, includeHeaderRow=true){
+function tableGrid(colXs, headerTopY, rowH, nDataRows, includeHeaderRow=true, headerH=null){
   let html = '';
-  const totalRows = (includeHeaderRow?1:0) + nDataRows;
-  for (let i=0;i<=totalRows;i++){
-    html += LN(colXs[0], headerTopY + i*rowH, colXs[colXs.length-1]-colXs[0], 0.6);
+  if (!headerH || !includeHeaderRow) {
+    const totalRows = (includeHeaderRow?1:0) + nDataRows;
+    for (let i=0;i<=totalRows;i++){
+      html += LN(colXs[0], headerTopY + i*rowH, colXs[colXs.length-1]-colXs[0], 0.6);
+    }
+    colXs.forEach(x => { html += LN(x, headerTopY, 0.6, totalRows*rowH); });
+  } else {
+    html += LN(colXs[0], headerTopY, colXs[colXs.length-1]-colXs[0], 0.6);
+    html += LN(colXs[0], headerTopY + headerH, colXs[colXs.length-1]-colXs[0], 0.6);
+    for (let i=1;i<=nDataRows;i++){
+      html += LN(colXs[0], headerTopY + headerH + i*rowH, colXs[colXs.length-1]-colXs[0], 0.6);
+    }
+    const totalH = headerH + nDataRows * rowH;
+    colXs.forEach(x => { html += LN(x, headerTopY, 0.6, totalH); });
   }
-  colXs.forEach(x => { html += LN(x, headerTopY, 0.6, totalRows*rowH); });
   return html;
 }
 
@@ -819,7 +829,7 @@ function renderInvoice(){
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
   const b = S.booking, sc = S.saleContract;
-  const ROWH = 20.09, ROW0 = 293.03;  // 실물 PDF 실측값 (데이터행 시작)
+  const ROWH = 20.09, ROW0 = 299.94;  // 헤더행 27pt (COMPASS 실측) + headerTopY 272.94
 
   let body = headerBlockCommon('invoice', si, b, sc);
   body += T(115.2, 283.9, 7.2, 'DESCRIPTION OF GOODS');
@@ -829,7 +839,7 @@ function renderInvoice(){
   body += T(522.4, 279.3, 7.2, 'CIF Amount'); body += T(533.3, 288.5, 7.2, '(US$)');
   body += T(553.4, 260.0, 7.2, '40\' X ' + S.containers.length, {align:'right', w:33});
   const IV_COLS = [16.6, 304.4, 354.6, 426.4, 498.1, 586.4];
-  body += tableGrid(IV_COLS, 272.94, ROWH, items.length);
+  body += tableGrid(IV_COLS, 272.94, ROWH, items.length, true, 27);
 
   items.forEach((it,i) => {
     const y = ROW0 + i*ROWH + 2.0;  // 실측: 행 상단에서 +2pt 내려서 여유 확보
@@ -870,7 +880,7 @@ function renderPackingList(){
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
   const b = S.booking, sc = S.saleContract;
-  const ROWH = 19.91, ROW0 = 287.53 + 19.91;  // 실물 PDF 실측값 (헤더행 1행분 이동)
+  const ROWH = 19.91, ROW0 = 287.53 + 26;  // 헤더행 26pt (COMPASS 실측)
 
   const byDetail = {};
   S.containers.forEach(c => {
@@ -902,7 +912,7 @@ function renderPackingList(){
     }
     body += T(553.4, 274.0, 7.2, '40\' x ' + S.containers.length, {align:'right', w:33});
     const PL_COLS = [16.6, 267.8, 300.1, 366.1, 419.2, 447.2, 498.1, 557.0, 586.4];
-    body += tableGrid(PL_COLS, 287.53, ROWH, chunk.length);
+    body += tableGrid(PL_COLS, 287.53, ROWH, chunk.length, true, 26);
 
     chunk.forEach((row, i) => {
       const y = ROW0 + i*ROWH + 2.0;  // 실측: 행 상단에서 +2pt
@@ -986,6 +996,10 @@ function renderSI(){
   p1 += T(193.9, 65.4, 7.2, si.crcf9_shipper_fax || 'FAX : +81-3-3528-9851');
   p1 += T(370.9, 12.4, 5.2, 'BOOKING NUMBER');
   p1 += T(487.9, 11.2, 7.2, b.cr49f_booking_no||'');
+  p1 += T(370.9, 25.3, 5.2, 'キャリアコード', {cjk:true});
+  p1 += T(487.9, 24.2, 7.2, b.crcf9_carrier_code || '');
+  p1 += T(370.9, 38.8, 5.2, 'B/L NUMBER');
+  p1 += T(487.9, 37.7, 7.2, b.cr49f_bl_number || '');
   p1 += T(391.0, 54.5, 13.5, 'SHIPPING INSTRUCTION', {bold:true});
   p1 += T(19.6, 79.8, 5.2, 'CONSIGNEE');
   p1 += T(19.6, 90.3, 7.2, si.crcf9_consignee||'', {w:340, wrap:true});
