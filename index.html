@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.34</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.35</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -142,7 +142,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.34</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.35</div>
     </div>
   </div>
   <div class="header-status">
@@ -1031,8 +1031,8 @@ function renderSI(){
   p1 += T(483.6, 323.9, 6.2, 'GROSS WEIGHT'); p1 += T(501.6, 331.4, 6.2, '(MT)');
   p1 += T(538.0, 323.9, 6.2, 'TARE WEIGHT '); p1 += T(553.8, 331.4, 6.2, '(MT)');
   p1 += T(36.7, 344.1, 7.2, si.crcf9_shipping_mark || 'NO MARK');
-  p1 += T(369.1, 344.1, 6.2, String(S.containers.length * 40), {align:'right', w:49});
-  p1 += T(439.2, 344.1, 7.2, t.totalBales, {align:'right', w:9.5});
+  p1 += T(369.1, 344.1, 7.2, String(S.containers.length * 40), {align:'right', w:49});
+  p1 += T(421.0, 344.1, 7.2, t.totalBales, {align:'right', w:28});
   p1 += T(454.6, 344.1, 7.2, 'BALES');
   p1 += T(510.9, 344.1, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:21.9});
   const totalTw = S.containers.reduce((s,c)=>s+(c.crcf9_t_w||0),0)/1000;
