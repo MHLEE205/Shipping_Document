@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.37</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.39</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -142,7 +142,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.37</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.39</div>
     </div>
   </div>
   <div class="header-status">
@@ -263,7 +263,7 @@ const INSURANCE_RATE = 0.001014; // Total x 0.1014%
 let DEMO_MODE = false;
 
 let S = {
-  accessToken: '', tokenExpiry: 0, userName: '',
+  token: '', tokenExpiry: 0, userName: '',
   booking: null, saleContract: null, saleDetails: [], containers: [], carrierCost: null,
   siList: [],            // 이 판매계약에 걸린 모든 S/I 레코드 (sino별)
   siDetailCache: {},     // { s_i_id: [detail...] }
@@ -308,7 +308,7 @@ async function handleCallback(){
     });
     const data = await res.json();
     if (!data.access_token) throw new Error(data.error_description || 'トークン取得失敗');
-    S.accessToken = data.access_token;
+    S.token = data.access_token;
     S.tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
     // ID token に含まれるユーザー情報を抽出
     if (data.id_token) {
@@ -334,7 +334,7 @@ async function dvGet(path){
   if (DEMO_MODE) throw new Error('デモモードではCOMPASS接続不可');
   if (Date.now() > S.tokenExpiry) throw new Error('セッション切れ。再ログインしてください。');
   const res = await fetch(`${DV_API}/${path}`, {
-    headers: { 'Authorization': `Bearer ${S.accessToken}`, 'OData-MaxVersion':'4.0', 'Accept':'application/json' }
+    headers: { 'Authorization': `Bearer ${S.token}`, 'OData-MaxVersion':'4.0', 'Accept':'application/json' }
   });
   if (!res.ok){ const e = await res.json().catch(()=>({})); throw new Error(`API ${res.status}: ${e?.error?.message || res.statusText}`); }
   return res.json();
@@ -384,7 +384,17 @@ async function searchInvoice(){
     const [scRes, sdRes, siRes, ctRes, ccRes] = await Promise.all([
       dvGet(`cr49f_sale_contracts(${contractId})?$select=cr49f_sale_contract_no,cr49f_terms_conditions,cr49f_pay_days,cr49f_pay_cls`),
       dvGet(`cr49f_sale_details?$filter=_cr49f_sale_contract_id_value eq ${contractId}&$select=cr49f_sale_detailid,cr49f_item_id,cr49f_price,cr49f_quantity`),
-      dvGet(`cr49f_s_is?$filter=_cr49f_sale_contract_id_value eq ${contractId}&$orderby=crcf9_sino asc`),
+      dvGet(`cr49f_s_is?$filter=_cr49f_sale_contract_id_value eq ${contractId}`+
+        `&$select=cr49f_s_iid,cr49f_lc_no,cr49f_payment_terms,`+
+        `crcf9_sino,crcf9_payment_deadline,crcf9_payment_classification,`+
+        `crcf9_po_vo,crcf9_vo_no,crcf9_all,`+
+        `crcf9_consignee,crcf9_notify_party,crcf9_address,crcf9_tel,crcf9_fax,`+
+        `crcf9_place_of_delivery_1,crcf9_place_of_delivery_2,crcf9_place_of_delivery_3,`+
+        `crcf9_pod_bl1,crcf9_pod_bl2,crcf9_pod_bl3,`+
+        `crcf9_bl_text1,crcf9_bl_text2,`+
+        `crcf9_shipper_tel,crcf9_shipper_fax,crcf9_shipping_mark,`+
+        `crcf9_port_of_discharge,crcf9_invoice_text1,crcf9_bencert_text,crcf9_fd_mail`+
+        `&$orderby=crcf9_sino asc`),
       dvGet(`crcf9_container_informations?$filter=_crcf9_booking_id_value eq ${S.booking.cr49f_bookingid}` +
         `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,_crcf9_sale_detail_id_value`),
       S.booking['_cr49f_carrier_cost_id_value']
@@ -469,6 +479,8 @@ function computeTotals(items){
 // ══════════════════════════════════════════════════════
 function fmtDate(d){ if(!d) return ''; const dt=new Date(d); return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`; }
 function fmtNum(n,dec=2){ return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
+function getEtd(bk){ return bk.crcf9_bl_etd || bk.cr49f_etd || null; }
+function getEta(bk){ return bk.crcf9_bl_eta || bk.cr49f_eta || null; }
 
 function renderSummary(){
   const b = S.booking, sc = S.saleContract;
@@ -477,9 +489,9 @@ function renderSummary(){
     <div><div class="lbl">Invoice No.</div><div class="val">${b.cr49f_invoice_no||''}</div></div>
     <div><div class="lbl">Vessel/Voy</div><div class="val">${b.cr49f_main_ship_name||''}</div></div>
     <div><div class="lbl">POL</div><div class="val">${getPol(b)}</div></div>
-    <div><div class="lbl">ETD</div><div class="val">${fmtDate(b.cr49f_etd)}</div></div>
-    <div><div class="lbl">ETA</div><div class="val">${fmtDate(b.cr49f_eta)}</div></div>
-    <div><div class="lbl">Contract No.</div><div class="val">${sc.cr49f_sale_contract_no||''}</div></div>
+    <div><div class="lbl">ETD</div><div class="val">${fmtDate(getEtd(b))}</div></div>
+    <div><div class="lbl">ETA</div><div class="val">${fmtDate(getEta(b))}</div></div>
+    <div><div class="lbl">Contract No.</div><div class="val">${S.siList[0]?.crcf9_po_vo || sc.cr49f_sale_contract_no||''}</div></div>
     <div><div class="lbl">Trade Term</div><div class="val">${sc.cr49f_terms_conditions||''}</div></div>
     <div><div class="lbl">コンテナ数</div><div class="val">${S.containers.length}</div></div>
     <div><div class="lbl">利用可能なS/I</div><div class="val">${S.siList.map(s=>'①②③④'[s.crcf9_sino-1]||s.crcf9_sino).join(' / ')}</div></div>
@@ -571,12 +583,12 @@ async function downloadExcel(){
 
     // 日付セル
     setDate(wsIV, 'I4', todaySerial);
-    setDate(wsIV, 'J12', toSerial(b.cr49f_etd));
-    setDate(wsIV, 'J13', toSerial(b.cr49f_eta));
+    setDate(wsIV, 'J12', toSerial(getEtd(b)));
+    setDate(wsIV, 'J13', toSerial(getEta(b)));
 
     // 文字列セル
     setStr(wsIV, 'I5', b.cr49f_invoice_no||'');
-    setStr(wsIV, 'I6', sc.cr49f_sale_contract_no||'');
+    setStr(wsIV, 'I6', si.crcf9_po_vo || sc.cr49f_sale_contract_no||'');
     setStr(wsIV, 'I7', si.crcf9_payment_deadline||si.cr49f_payment_terms||'');
     setStr(wsIV, 'E9', si.crcf9_consignee||'');           // Buyer 会社名
     setStr(wsIV, 'I9', b.cr49f_main_ship_name||'');
@@ -593,7 +605,7 @@ async function downloadExcel(){
     // 品目行 (21行目) ※FORMAT固定1行
     if (items.length>0){
       const it = items[0];
-      setStr(wsIV, 'A21', sc.cr49f_sale_contract_no||'');
+      setStr(wsIV, 'A21', si.crcf9_po_vo || sc.cr49f_sale_contract_no||'');
       setStr(wsIV, 'D21', it.productName||'');
       setNum(wsIV, 'F21', it.bales);
       setNum(wsIV, 'G21', it.weightMt);
@@ -617,12 +629,12 @@ async function downloadExcel(){
 
     // 日付セル
     setDate(wsPL, 'L4', todaySerial);
-    setDate(wsPL, 'L12', toSerial(b.cr49f_etd));
-    setDate(wsPL, 'L13', toSerial(b.cr49f_eta));
+    setDate(wsPL, 'L12', toSerial(getEtd(b)));
+    setDate(wsPL, 'L13', toSerial(getEta(b)));
 
     // 文字列セル
     setStr(wsPL, 'K5', b.cr49f_invoice_no||'');
-    setStr(wsPL, 'K6', sc.cr49f_sale_contract_no||'');
+    setStr(wsPL, 'K6', si.crcf9_po_vo || sc.cr49f_sale_contract_no||'');
     setStr(wsPL, 'K7', si.crcf9_payment_deadline||si.cr49f_payment_terms||'');
     setStr(wsPL, 'E9', si.crcf9_consignee||'');            // Buyer 会社名
     setStr(wsPL, 'J9', b.cr49f_main_ship_name||'');
@@ -804,7 +816,7 @@ function headerBlockCommon(kind, si, b, sc){
   h += T(labelX, Y.invNo, 8.6, 'Invoice No', {bold:true});
   h += T(420, Y.invNo, 8.6, b.cr49f_invoice_no || '', {align:'right', w:163.4});
   h += T(labelX, Y.contNo, 8.6, 'Contract No', {bold:true});
-  h += T(420, Y.contNo, 8.6, sc.cr49f_sale_contract_no || '', {align:'right', w:163.4});
+  h += T(420, Y.contNo, 8.6, si.crcf9_po_vo || sc.cr49f_sale_contract_no || '', {align:'right', w:163.4});
   h += T(labelX, Y.pay, 8.6, 'Payment Term', {bold:true});
   h += T(420, Y.payV, 7.2, si.crcf9_payment_deadline || '', {align:'right', w:163.4});
   h += T(labelX, Y.ship, 8.6, 'Shipped per', {bold:true});
@@ -812,9 +824,9 @@ function headerBlockCommon(kind, si, b, sc){
   h += T(labelX, Y.bl, 8.6, 'B/L No.', {bold:true});
   h += T(420, Y.bl, 8.6, b.cr49f_bl_number || '', {align:'right', w:163.4});
   h += T(labelX, Y.etd, 8.6, 'On or about', {bold:true});
-  h += T(420, Y.etd, 8.6, fmtDate(b.cr49f_etd), {align:'right', w:163.4});
+  h += T(420, Y.etd, 8.6, fmtDate(getEtd(b)), {align:'right', w:163.4});
   h += T(labelX, Y.eta, 8.6, 'ETA', {bold:true});
-  h += T(420, Y.eta, 8.6, fmtDate(b.cr49f_eta), {align:'right', w:163.4});
+  h += T(420, Y.eta, 8.6, fmtDate(getEta(b)), {align:'right', w:163.4});
   h += T(labelX, Y.from, 8.6, 'From', {bold:true});
   h += T(420, Y.from, 8.6, getPol(b), {align:'right', w:163.4});
   h += T(labelX, Y.to, 8.6, 'To', {bold:true});
