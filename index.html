@@ -3436,9 +3436,17 @@ function renderSinoSelectors(){
   document.getElementById('ivSinoGrid').innerHTML = mk('ivSino', S.ivSino);
   document.getElementById('siSinoGrid').innerHTML = mk('siSino', S.siSino);
 
-  const podMk = (prefix) => [1,2,3].map(n => `<label class="check-row"><input type="checkbox" ${n===1?'checked':''} onchange="toggle${prefix}Pod(${n})"> ${n===1?'1st':n===2?'2nd':'3rd'} POD</label>`).join('');
-  document.getElementById('ivPodGrid').innerHTML = podMk('Iv');
-  document.getElementById('siPodGrid').innerHTML = podMk('Si');
+  const podMk = (prefix, si, podState) => [1,2,3].map(n => {
+    const val = si ? (si[`crcf9_place_of_delivery_${n}`] || '') : '';
+    const has = !!val;
+    const checked = has && podState[n] ? 'checked' : '';
+    const disabled = has ? '' : 'disabled';
+    const ordinal = n===1?'1st':n===2?'2nd':'3rd';
+    const valSpan = has ? `<span style="font-size:11px;color:var(--text2);margin-left:6px;font-weight:400;">${val}</span>` : '';
+    return `<label class="check-row" style="${has?'':'opacity:0.3;cursor:default'}"><input type="checkbox" ${checked} ${disabled} onchange="toggle${prefix}Pod(${n})"> ${ordinal} POD${valSpan}</label>`;
+  }).join('');
+  document.getElementById('ivPodGrid').innerHTML = podMk('Iv', currentSi(S.ivSino), S.ivPod);
+  document.getElementById('siPodGrid').innerHTML = podMk('Si', currentSi(S.siSino), S.siPod);
 }
 function setIvSino(n){ S.ivSino = n; }
 function setSiSino(n){ S.siSino = n; }
