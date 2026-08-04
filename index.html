@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.43</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.46</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -142,7 +142,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.43</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.46</div>
     </div>
   </div>
   <div class="header-status">
@@ -432,7 +432,6 @@ async function searchInvoice(){
 // 集計 (DOC-D-03 §4-3, §4-7)
 // ══════════════════════════════════════════════════════
 function aggregateItems(siId){
-  const details = S.siDetailCache[siId] || [];
   // 컨테이너를 sale_detail_id 기준으로 묶어서 집계 (§4-3)
   const byDetail = {};
   S.containers.forEach(c => {
@@ -443,7 +442,7 @@ function aggregateItems(siId){
     byDetail[key].nwKg  += (c.crcf9_n_w || 0);
   });
 
-  const items = details.map(d => {
+  const mapDetails = (dList) => dList.map(d => {
     const sdId = d['_crcf9_sale_detail_id_value'] || d.crcf9_sale_detail_id;
     const sd = S.saleDetails.find(s => s.cr49f_sale_detailid === sdId);
     const agg = byDetail[sdId] || { bales:0, nwKg:0 };
@@ -456,9 +455,21 @@ function aggregateItems(siId){
       price, bales: agg.bales, weightMt,
       cifAmount: Math.round(weightMt * price * 100)/100,
     };
-  }).filter(it => it.bales > 0); // 이번 인보이스에 실제로 실린 품목만
+  }).filter(it => it.bales > 0);
 
-  return items;
+  // 1차: 지정된 S/I로 시도
+  const items = mapDetails(S.siDetailCache[siId] || []);
+  if (items.length > 0) return items;
+
+  // 2차 fallback: 현재 S/I에 컨테이너 매핑이 없으면 다른 S/I에서 찾기
+  // (S/I①이 DEPOSIT용이라 detail-container 매핑이 없는 케이스 등)
+  for (const siRecord of S.siList) {
+    if (siRecord.cr49f_s_iid === siId) continue;
+    const fallbackItems = mapDetails(S.siDetailCache[siRecord.cr49f_s_iid] || []);
+    if (fallbackItems.length > 0) return fallbackItems;
+  }
+
+  return [];
 }
 
 function computeTotals(items){
@@ -802,7 +813,8 @@ function renderPackingList(){
     if (isLast){
       const totalY = ROW0 + chunk.length*ROWH;
       body += LN(16.65, totalY, 570.49, 1.5);
-      body += T(342.6, totalY+2.0, 7.2, `TOTAL   :${S.containers.length}   Containers`);
+      body += T(18.4, totalY+2.0, 7.2, 'TOTAL');
+      body += T(270.0, totalY+2.0, 7.2, `${S.containers.length} Containers`);
       body += T(429.1, totalY+2.0, 7.2, t.totalBales, {align:'right', w:15.6});
       body += T(463.3, totalY+2.0, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:30});
       body += T(518.2, totalY+2.0, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:30});
@@ -911,7 +923,7 @@ function renderSI(){
   p1 += T(435.2, 323.9, 6.2, 'QUANTITY');
   p1 += T(483.6, 323.9, 6.2, 'GROSS WEIGHT'); p1 += T(501.6, 331.4, 6.2, '(MT)');
   p1 += T(538.0, 323.9, 6.2, 'TARE WEIGHT '); p1 += T(553.8, 331.4, 6.2, '(MT)');
-  p1 += T(36.7, 344.1, 7.2, si.crcf9_shipping_mark || 'NO MARK');
+  p1 += T(18.0, 344.1, 7.2, si.crcf9_shipping_mark || 'NO MARK', {w:73, autoWrap:true});
   p1 += T(369.1, 344.1, 7.2, String(S.containers.length * 40), {align:'right', w:49});
   p1 += T(421.0, 344.1, 7.2, t.totalBales, {align:'right', w:28});
   p1 += T(454.6, 344.1, 7.2, 'BALES');
@@ -943,8 +955,7 @@ function renderSI(){
     p2 += T(110.2, 40.0, 13.5, 'CONTAINER LOADING PLAN', {bold:true});
     p2 += T(396.9, 50.1, 8.3, `Invoice NO        :       ${b.cr49f_invoice_no||''}`);
     if (chunks.length>1) p2 += T(480,50.1,8.3,`(Page ${pageIdx+1}/${chunks.length})`,{align:'right',w:100});
-    p2 += T(33.1, 65.7, 6.7, 'SHIPPING MARK :');
-    p2 += T(131.0, 65.7, 6.7, si.crcf9_shipping_mark || 'NO MARK');
+    p2 += T(18.0, 65.7, 6.7, 'SHIPPING MARK : ' + (si.crcf9_shipping_mark || 'NO MARK'), {w:163, autoWrap:true});
     p2 += T(190.3, 73.7, 6.7, 'DESCRIPTION OF PACKAGES AND GOODS');
     p2 += T(351.2, 62.3, 6.2, 'TYPE');
     p2 += T(378.2, 62.8, 5.2, 'MEASUREMENT '); p2 += T(393.0, 75.3, 5.2, '(M3)');
@@ -961,9 +972,9 @@ function renderSI(){
       const rowNo = chunks.slice(0,pageIdx).reduce((s,ch)=>s+ch.length,0) + i + 1;
       p2 += T(24.5, y, 6.2, rowNo);
       p2 += T(51.6, y, 6.2, c.crcf9_container_no||'');
-      p2 += T(113.0, y, 6.2, c.crcf9_seal_no||'');
+      p2 += T(116.0, y, 6.2, c.crcf9_seal_no||'');
       p2 += T(184.2, y, 6.2, itemNameForContainer(c), {w:155, autoWrap:true});
-      p2 += T(345.6, y, 6.2, c.crcf9_type||'');
+      p2 += T(348.0, y, 6.2, c.crcf9_type||'');
       p2 += T(372.84, y, 6.2, '40', {align:'right', w:49.72});
       p2 += T(430.9, y, 6.2, c.crcf9_quantity||0, {align:'right', w:10.65});
       p2 += T(445.4, y, 6.2, 'BALES');
