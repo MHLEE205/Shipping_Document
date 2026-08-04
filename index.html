@@ -3828,7 +3828,7 @@ function renderInvoice(){
   }
   body += T(372.9, 736.8, 8.6, 'LEENEAR CORPORATION');
   body += LN(371.5, 785.0, 215.3, 1.4);
-  body += T(372.9, 789.9, 8.6, S.userDisplayName || 'LEENEAR');
+  body += T(372.9, 789.9, 8.6, S.signerName || 'LEENEAR');
 
   buildDocWrap('invoice', [body]);
 }
@@ -3901,7 +3901,7 @@ function renderPackingList(){
       if(si.crcf9_all){ body += T(27.8, totalY+40, 7.2, si.crcf9_all, {w:260, autoWrap:true}); }
       body += T(372.9, 744.2, 8.6, 'LEENEAR CORPORATION');
       body += LN(371.5, 785.0, 215.3, 1.4);
-      body += T(372.9, 797.4, 8.6, S.userDisplayName || 'LEENEAR');
+      body += T(372.9, 797.4, 8.6, S.signerName || 'LEENEAR');
     } else {
       body += T(480, 800, 8.6, '(Continued on next page)', {align:'right', w:100, italic:true});
     }
