@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.46</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.47</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -142,7 +142,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.46</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.47</div>
     </div>
   </div>
   <div class="header-status">
@@ -442,10 +442,11 @@ function aggregateItems(siId){
     byDetail[key].nwKg  += (c.crcf9_n_w || 0);
   });
 
-  const mapDetails = (dList) => dList.map(d => {
+  const processDetail = (d) => {
     const sdId = d['_crcf9_sale_detail_id_value'] || d.crcf9_sale_detail_id;
+    if (!sdId || !byDetail[sdId] || byDetail[sdId].bales === 0) return null;
     const sd = S.saleDetails.find(s => s.cr49f_sale_detailid === sdId);
-    const agg = byDetail[sdId] || { bales:0, nwKg:0 };
+    const agg = byDetail[sdId];
     const weightMt = agg.nwKg / 1000;
     const price = sd ? sd.cr49f_price : (d.crcf9_price || 0);
     return {
@@ -455,21 +456,25 @@ function aggregateItems(siId){
       price, bales: agg.bales, weightMt,
       cifAmount: Math.round(weightMt * price * 100)/100,
     };
-  }).filter(it => it.bales > 0);
+  };
 
-  // 1차: 지정된 S/I로 시도
-  const items = mapDetails(S.siDetailCache[siId] || []);
-  if (items.length > 0) return items;
+  // 1차: 지정 S/I detail에서 byDetail 매핑 시도
+  const primary = (S.siDetailCache[siId] || []).map(processDetail).filter(Boolean);
+  if (primary.length > 0) return primary;
 
-  // 2차 fallback: 현재 S/I에 컨테이너 매핑이 없으면 다른 S/I에서 찾기
-  // (S/I①이 DEPOSIT용이라 detail-container 매핑이 없는 케이스 등)
-  for (const siRecord of S.siList) {
-    if (siRecord.cr49f_s_iid === siId) continue;
-    const fallbackItems = mapDetails(S.siDetailCache[siRecord.cr49f_s_iid] || []);
-    if (fallbackItems.length > 0) return fallbackItems;
+  // 2차: 모든 S/I detail 캐시를 통합 검색 (S/I①이 별도 sale_detail 참조 케이스 대응)
+  const seen = new Set();
+  const fallback = [];
+  for (const cache of Object.values(S.siDetailCache)) {
+    for (const d of (cache || [])) {
+      const sdId = d['_crcf9_sale_detail_id_value'] || d.crcf9_sale_detail_id;
+      if (!sdId || seen.has(sdId)) continue;
+      seen.add(sdId);
+      const item = processDetail(d);
+      if (item) fallback.push(item);
+    }
   }
-
-  return [];
+  return fallback;
 }
 
 function computeTotals(items){
