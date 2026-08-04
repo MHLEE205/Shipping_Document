@@ -3806,11 +3806,8 @@ function renderInvoice(){
   body += T(27.8, totalY+24.6, 8.6, 'COUNTRY OF ORIGIN :');
   body += T(149.8, totalY+25.1, 8.6, 'JAPAN');
   { // crcf9_invoicetext (IV only) + crcf9_all — COUNTRY OF ORIGIN 下
-    let extraY = totalY + 40;
-    const invText = si.crcf9_invoicetext || '';
-    const allText = si.crcf9_all || '';
-    if(invText){ body += T(27.8, extraY, 7.2, invText, {w:260, autoWrap:true}); extraY += 13; }
-    if(allText){ body += T(27.8, extraY, 7.2, allText, {w:260, autoWrap:true}); }
+    const parts = [si.crcf9_invoicetext||'', si.crcf9_all||''].filter(Boolean);
+    if(parts.length) body += T(27.8, totalY+40, 7.2, parts.join('\n'), {w:260, autoWrap:true});
   }
   if(t.isCIF){
     // CIF: FREIGHT + INSURANCE PREMIUM + FOB (3줄)
