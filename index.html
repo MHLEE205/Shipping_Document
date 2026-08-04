@@ -3661,7 +3661,7 @@ async function searchInvoice(){
         `crcf9_pod_bl1,crcf9_pod_bl2,crcf9_pod_bl3,`+
         `crcf9_bl_text1,crcf9_bl_text2,`+
         `crcf9_shipper_tel,crcf9_shipper_fax,crcf9_shipping_mark,`+
-        `crcf9_port_of_discharge,crcf9_invoice_text1,crcf9_bencert_text,crcf9_fd_mail,crcf9_local_agent_note`+
+        `crcf9_port_of_discharge,crcf9_invoice_text1,crcf9_invoicetext,crcf9_bencert_text,crcf9_fd_mail,crcf9_local_agent_note`+
         `&$orderby=crcf9_sino asc`),
       dvGet(`crcf9_container_informations?$filter=_crcf9_booking_id_value eq ${S.booking.cr49f_bookingid}`+
         `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,_crcf9_sale_detail_id_value`),
@@ -3805,6 +3805,13 @@ function renderInvoice(){
 
   body += T(27.8, totalY+24.6, 8.6, 'COUNTRY OF ORIGIN :');
   body += T(149.8, totalY+25.1, 8.6, 'JAPAN');
+  { // crcf9_invoicetext (IV only) + crcf9_all — COUNTRY OF ORIGIN 下
+    let extraY = totalY + 40;
+    const invText = si.crcf9_invoicetext || '';
+    const allText = si.crcf9_all || '';
+    if(invText){ body += T(27.8, extraY, 7.2, invText, {w:260, autoWrap:true}); extraY += 13; }
+    if(allText){ body += T(27.8, extraY, 7.2, allText, {w:260, autoWrap:true}); }
+  }
   if(t.isCIF){
     // CIF: FREIGHT + INSURANCE PREMIUM + FOB (3줄)
     body += T(303.3, totalY+39.8, 8.6, 'FREIGHT');
@@ -3894,6 +3901,7 @@ function renderPackingList(){
       body += T(518.2, totalY+2.0, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:30});
       body += T(27.8, totalY+24.6, 8.6, 'COUNTRY OF ORIGIN :');
       body += T(149.8, totalY+25.1, 8.6, 'JAPAN');
+      if(si.crcf9_all){ body += T(27.8, totalY+40, 7.2, si.crcf9_all, {w:260, autoWrap:true}); }
       body += T(372.9, 744.2, 8.6, 'LEENEAR CORPORATION');
       body += LN(371.5, 785.0, 215.3, 1.4);
       body += T(372.9, 797.4, 8.6, S.userDisplayName || 'LEENEAR');
