@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.47</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.48</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -142,7 +142,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.47</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.48</div>
     </div>
   </div>
   <div class="header-status">
@@ -442,6 +442,15 @@ function aggregateItems(siId){
     byDetail[key].nwKg  += (c.crcf9_n_w || 0);
   });
 
+  // 모든 S/I 캐시에서 sdId → productName 맵 구성 (S/I① productName 비어있을 때 보완용)
+  const nameMap = {};
+  for (const cache of Object.values(S.siDetailCache)) {
+    for (const d of (cache || [])) {
+      const sdId = d['_crcf9_sale_detail_id_value'] || d.crcf9_sale_detail_id;
+      if (sdId && d.crcf9_productname && !nameMap[sdId]) nameMap[sdId] = d.crcf9_productname;
+    }
+  }
+
   const processDetail = (d) => {
     const sdId = d['_crcf9_sale_detail_id_value'] || d.crcf9_sale_detail_id;
     if (!sdId || !byDetail[sdId] || byDetail[sdId].bales === 0) return null;
@@ -451,7 +460,7 @@ function aggregateItems(siId){
     const price = sd ? sd.cr49f_price : (d.crcf9_price || 0);
     return {
       saleDetailId: sdId,
-      productName: d.crcf9_productname || '',
+      productName: d.crcf9_productname || nameMap[sdId] || '',
       hsCode: d.crcf9_hs_code || '',
       price, bales: agg.bales, weightMt,
       cifAmount: Math.round(weightMt * price * 100)/100,
@@ -462,16 +471,16 @@ function aggregateItems(siId){
   const primary = (S.siDetailCache[siId] || []).map(processDetail).filter(Boolean);
   if (primary.length > 0) return primary;
 
-  // 2차: 모든 S/I detail 캐시를 통합 검색 (S/I①이 별도 sale_detail 참조 케이스 대응)
+  // 2차: 모든 캐시를 통합 검색 — 중복은 결과 기준으로 제거 (입력 sdId 기준 seen은 S/I②를 skip하는 버그 있음)
   const seen = new Set();
   const fallback = [];
   for (const cache of Object.values(S.siDetailCache)) {
     for (const d of (cache || [])) {
-      const sdId = d['_crcf9_sale_detail_id_value'] || d.crcf9_sale_detail_id;
-      if (!sdId || seen.has(sdId)) continue;
-      seen.add(sdId);
       const item = processDetail(d);
-      if (item) fallback.push(item);
+      if (item && !seen.has(item.saleDetailId)) {
+        seen.add(item.saleDetailId);
+        fallback.push(item);
+      }
     }
   }
   return fallback;
