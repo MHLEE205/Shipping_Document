@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.40</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.41</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -101,6 +101,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
 .a4-page .ln { position: absolute; background: #000; }
 .a4-page .tx { position: absolute; white-space: pre; line-height: 1.15; }
 .a4-page .tx.wrap { white-space: pre-wrap; }
+.a4-page .tx.auto-wrap { white-space: normal; overflow-wrap: break-word; word-break: break-word; }
 .a4-page img.tx { object-fit: contain; }
 
 @media print {
@@ -141,7 +142,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.40</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.41</div>
     </div>
   </div>
   <div class="header-status">
@@ -368,6 +369,7 @@ async function searchInvoice(){
     S.booking = bkgRes.value[0];
 
     // region_japan 정보 로드 (POL 정보 필요)
+    // compass_mapping_1 실측: booking의 cr49f_region_japan_id 는 GUID 직접 반환
     const regionJapanId = S.booking['_cr49f_region_japan_id_value'];
     if (regionJapanId) {
       try {
@@ -431,6 +433,7 @@ async function searchInvoice(){
 // ══════════════════════════════════════════════════════
 function aggregateItems(siId){
   const details = S.siDetailCache[siId] || [];
+  // 컨테이너를 sale_detail_id 기준으로 묶어서 집계 (§4-3)
   const byDetail = {};
   S.containers.forEach(c => {
     const key = c['_crcf9_sale_detail_id_value'] || c.crcf9_sale_detail_id;
@@ -453,7 +456,7 @@ function aggregateItems(siId){
       price, bales: agg.bales, weightMt,
       cifAmount: Math.round(weightMt * price * 100)/100,
     };
-  }).filter(it => it.bales > 0);
+  }).filter(it => it.bales > 0); // 이번 인보이스에 실제로 실린 품목만
 
   return items;
 }
@@ -502,7 +505,7 @@ function renderSinoSelectors(){
   const mk = (name, sel) => [1,2,3,4].map(n => {
     const disabled = !avail.includes(n) ? 'disabled' : '';
     const checked = n===sel ? 'checked' : '';
-    return `<label class="radio-row"><input type="radio" name="${name}" value="${n}" ${checked} ${disabled} onchange="${name}==='ivSino'?setIvSino(${n}):setSiSino(${n})"> S/I${'①②③④'[n-1]}</label>`;
+    return `<label class="radio-row"><input type="radio" name="${name}" value="${n}" ${checked} ${disabled} onchange="${name === 'ivSino' ? `setIvSino(${n})` : `setSiSino(${n})`}"> S/I${'①②③④'[n-1]}</label>`;
   }).join('');
   document.getElementById('ivSinoGrid').innerHTML = mk('ivSino', S.ivSino);
   document.getElementById('siSinoGrid').innerHTML = mk('siSino', S.siSino);
@@ -547,6 +550,7 @@ function showPreview(which){
 function printPage(which){
   const el = document.getElementById('doc-'+which);
   if (!el){ alert('先にプレビューを表示してください'); return; }
+  // 全 doc-wrap を非表示 → print-target のみ block
   document.querySelectorAll('.doc-wrap').forEach(w => {
     w.classList.remove('print-target');
     w.style.display = (w === el) ? 'block' : 'none';
@@ -559,12 +563,14 @@ function printPage(which){
 // 좌표 정밀 렌더 엔진 (DOC-D-03 §8 — 실물 NA2605-08 PDF에서 fitz로 추출한 pt 좌표)
 // ══════════════════════════════════════════════════════
 
+// DOC-D-03 §8 실물 PDF에서 추출한 정적 테두리선 좌표 (헤더 영역, 데이터 무관 고정)
 const IV_HEADER_LINES = [[17.01, 33.62, 569.77, 0.72], [17.01, 103.23, 337.99, 0.72], [17.01, 204.41, 337.99, 0.72], [17.01, 239.57, 337.99, 0.72], [354.99, 34.34, 0.72, 223.89], [355.71, 75.24, 231.06, 0.72], [355.71, 103.23, 231.06, 0.72], [355.71, 147.0, 231.06, 0.72], [355.71, 190.05, 231.06, 0.72], [17.01, 257.51, 569.77, 0.72]];
 const PL_HEADER_LINES = [[17.01, 33.62, 569.77, 0.72], [17.01, 103.23, 337.99, 0.72], [17.01, 204.41, 337.99, 0.72], [17.01, 239.57, 337.99, 0.72], [354.99, 34.34, 0.72, 223.89], [355.71, 75.24, 231.06, 0.72], [355.71, 103.23, 231.06, 0.72], [355.71, 147.0, 231.06, 0.72], [355.71, 190.05, 231.06, 0.72], [17.01, 257.75, 569.77, 0.72]];
 const SI0_ALL_LINES = [[16.9, 8.24, 351.57, 0.6], [368.1, 8.4, 0.52, 296.49], [16.9, 304.52, 351.57, 0.6], [16.75, 8.4, 0.52, 296.49], [368.1, 8.4, 0.52, 67.55], [16.9, 75.58, 351.57, 0.6], [16.75, 8.4, 0.52, 67.55], [16.75, 75.58, 351.87, 0.6], [368.1, 75.58, 0.52, 54.39], [16.75, 129.45, 351.87, 0.6], [16.75, 75.58, 0.52, 54.39], [368.1, 129.45, 0.52, 94.79], [16.75, 223.72, 351.87, 0.6], [16.75, 129.45, 0.52, 94.79], [16.9, 223.72, 186.25, 0.6], [202.78, 223.87, 0.52, 27.15], [16.9, 250.66, 186.25, 0.6], [16.75, 223.87, 0.52, 27.15], [202.93, 223.72, 165.54, 0.6], [368.1, 223.87, 0.52, 27.15], [202.93, 250.66, 165.54, 0.6], [202.78, 250.81, 0.52, 26.63], [16.9, 277.07, 186.25, 0.6], [16.75, 250.81, 0.52, 26.63], [368.1, 250.81, 0.52, 26.63], [202.93, 277.07, 165.54, 0.6], [16.9, 277.59, 186.25, 0.6], [202.78, 277.74, 0.52, 27.15], [16.9, 304.52, 186.25, 0.6], [16.75, 277.74, 0.52, 27.15], [202.93, 277.59, 165.54, 0.6], [368.1, 277.74, 0.52, 27.15], [202.93, 304.52, 165.54, 0.6], [368.1, 8.24, 218.92, 0.6], [586.51, 8.24, 0.52, 296.8], [368.1, 304.52, 218.92, 0.6], [368.1, 8.24, 0.52, 296.8], [586.51, 8.24, 0.52, 13.99], [368.1, 21.71, 218.92, 0.6], [368.1, 8.24, 0.52, 13.99], [586.51, 21.71, 0.52, 13.99], [368.1, 35.18, 218.92, 0.6], [368.1, 21.71, 0.52, 13.99], [586.51, 35.18, 0.52, 13.99], [368.1, 48.65, 218.92, 0.6], [368.1, 35.18, 0.52, 13.99], [586.51, 48.65, 0.52, 27.45], [368.1, 75.58, 218.92, 0.6], [368.1, 48.65, 0.52, 27.45], [586.51, 75.58, 0.52, 54.39], [368.1, 129.45, 218.92, 0.6], [586.51, 129.45, 0.52, 40.92], [368.1, 169.85, 218.92, 0.6], [368.1, 129.45, 0.52, 40.92], [586.51, 169.85, 0.52, 108.26], [368.1, 277.59, 218.92, 0.6], [368.1, 169.85, 0.52, 108.26], [586.52, 304.52, 0.52, 18.65], [16.75, 304.52, 0.52, 18.65], [491.91, 317.73, 6.21, 0.6], [498.11, 317.73, 5.68, 0.6], [503.78, 317.73, 5.28, 0.6], [509.05, 317.73, 5.28, 0.6], [514.32, 317.73, 5.28, 0.6], [519.6, 317.73, 5.28, 0.6], [524.87, 317.73, 3.78, 0.6], [528.64, 317.73, 5.28, 0.6], [533.92, 317.73, 5.28, 0.6], [16.75, 322.65, 76.48, 0.6], [92.71, 322.65, 0.52, 18.65], [16.75, 340.78, 76.48, 0.6], [16.75, 322.65, 0.52, 18.65], [92.71, 322.65, 275.9, 0.6], [368.1, 322.65, 0.52, 18.65], [92.71, 340.78, 275.9, 0.6], [368.1, 322.65, 52.74, 0.6], [420.32, 322.65, 0.52, 18.65], [368.1, 340.78, 52.74, 0.6], [420.32, 322.65, 62.24, 0.6], [482.04, 322.65, 0.52, 18.65], [420.32, 340.78, 62.24, 0.6], [482.04, 322.65, 53.78, 0.6], [535.3, 322.65, 0.52, 18.65], [482.04, 340.78, 53.78, 0.6], [535.3, 322.65, 51.71, 0.6], [586.49, 322.65, 0.52, 18.65], [535.3, 340.78, 51.71, 0.6], [92.71, 340.78, 0.52, 395.24], [16.75, 735.5, 76.48, 0.6], [16.75, 340.78, 0.52, 395.24], [92.86, 340.78, 275.6, 0.6], [368.1, 340.93, 0.52, 394.93], [92.86, 735.5, 275.6, 0.6], [92.71, 340.93, 0.52, 394.93], [420.32, 340.78, 0.52, 395.24], [368.1, 735.5, 52.74, 0.6], [368.1, 340.78, 0.52, 395.24], [420.32, 340.78, 31.38, 0.6], [451.18, 340.78, 0.52, 395.24], [420.32, 735.5, 31.38, 0.6], [451.18, 340.78, 31.38, 0.6], [482.04, 340.78, 0.52, 395.24], [451.18, 735.5, 31.38, 0.6], [535.3, 340.78, 0.52, 395.24], [482.04, 735.5, 53.78, 0.6], [586.49, 340.78, 0.52, 395.24], [535.3, 735.5, 51.71, 0.6], [586.52, 735.65, 0.52, 15.75], [16.75, 735.65, 0.52, 15.75], [16.9, 735.5, 76.18, 0.6], [92.71, 735.65, 0.52, 15.75], [16.9, 751.04, 76.18, 0.6], [368.1, 735.65, 0.52, 15.75], [92.86, 751.04, 275.6, 0.6], [368.25, 735.5, 52.44, 0.6], [420.32, 735.65, 0.52, 15.75], [368.25, 751.04, 52.44, 0.6], [420.47, 735.5, 31.07, 0.6], [451.18, 735.65, 0.52, 15.75], [420.47, 751.04, 31.07, 0.6], [451.33, 735.5, 31.07, 0.6], [482.04, 735.65, 0.52, 15.75], [451.33, 751.04, 31.07, 0.6], [482.19, 735.5, 53.48, 0.6], [535.3, 735.65, 0.52, 15.75], [482.19, 751.04, 53.48, 0.6], [535.45, 735.5, 51.4, 0.6], [535.45, 751.04, 51.4, 0.6], [586.52, 751.19, 0.52, 2.8], [16.75, 751.19, 0.52, 2.8], [586.52, 753.78, 0.52, 67.55], [16.75, 753.78, 0.52, 67.55]];
 const SI1_HEADER_LINES = [[586.52, 34.26, 0.52, 155.09], [16.75, 34.26, 0.52, 155.09], [586.52, 61.05, 0.52, 32.63], [16.75, 61.05, 0.52, 32.63], [16.75, 61.05, 95.48, 0.6], [111.71, 61.05, 0.52, 16.58], [16.75, 77.1, 95.48, 0.6], [16.75, 61.05, 0.52, 16.58], [111.71, 61.05, 71.74, 0.6], [182.93, 61.05, 0.52, 32.63], [111.71, 93.16, 71.74, 0.6], [111.71, 61.05, 0.52, 32.63], [182.93, 61.05, 0.52, 16.58], [111.71, 77.1, 71.74, 0.6], [130.98, 72.68, 5.17, 0.6], [136.14, 72.68, 5.45, 0.6], [141.58, 72.68, 2.44, 0.6], [144.02, 72.68, 5.84, 0.6], [149.84, 72.68, 4.73, 0.6], [154.56, 72.68, 4.82, 0.6], [159.37, 72.68, 4.8, 0.6], [182.93, 61.05, 161.95, 0.6], [344.36, 61.05, 0.52, 32.63], [182.93, 93.16, 161.95, 0.6], [344.36, 61.05, 29.01, 0.6], [372.85, 61.05, 0.52, 32.63], [344.36, 93.16, 29.01, 0.6], [372.85, 61.05, 52.74, 0.6], [425.07, 61.05, 0.52, 32.63], [372.85, 93.16, 52.74, 0.6], [425.07, 61.05, 47.99, 0.6], [472.55, 61.05, 0.52, 32.63], [425.07, 93.16, 47.99, 0.6], [472.55, 61.05, 57.49, 0.6], [529.52, 61.05, 0.52, 32.63], [472.55, 93.16, 57.49, 0.6], [529.52, 61.05, 57.49, 0.6], [529.52, 93.16, 57.49, 0.6], [16.75, 93.16, 19.5, 0.6], [35.74, 93.16, 0.52, 20.2], [16.75, 93.16, 0.52, 20.2], [35.74, 93.16, 76.48, 0.6], [111.7, 93.16, 0.52, 20.2], [182.92, 93.16, 0.52, 20.2], [344.35, 93.16, 0.52, 20.2], [372.84, 93.16, 0.52, 20.2], [372.84, 93.16, 52.74, 0.6], [425.06, 93.16, 0.52, 20.2], [425.06, 93.16, 19.5, 0.6], [444.05, 93.16, 0.52, 20.2], [444.05, 93.16, 29.01, 0.6], [472.54, 93.16, 0.52, 20.2], [472.54, 93.16, 57.49, 0.6], [529.52, 93.16, 0.52, 20.2], [586.49, 93.16, 0.52, 20.2]];
 
 function LNs(arr){ return arr.map(l => LN(l[0], l[1], l[2], l[3])).join(''); }
+// 반복 행 테이블의 전체 격자(헤더 1행 + 데이터 N행)를 그림 — TOTAL 행 테두리는 별도 처리
 function tableGrid(colXs, headerTopY, rowH, nDataRows, includeHeaderRow=true, headerH=null){
   let html = '';
   if (!headerH || !includeHeaderRow) {
@@ -588,18 +594,20 @@ function tableGrid(colXs, headerTopY, rowH, nDataRows, includeHeaderRow=true, he
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function T(x,y,size,text,opts={}){
   const wrap = opts.wrap ? ' wrap' : '';
+  const autoWrap = opts.autoWrap ? ' auto-wrap' : '';
   const w = opts.w ? `width:${opts.w}pt;` : '';
   const align = opts.align ? `text-align:${opts.align};` : '';
   const bold = opts.bold ? 'font-weight:bold;' : '';
   const italic = opts.italic ? 'font-style:italic;' : '';
   const cjk = opts.cjk ? "font-family:'Noto Sans JP',sans-serif;" : '';
-  return `<div class="tx${wrap}" style="left:${x}pt;top:${y}pt;font-size:${size}pt;${w}${align}${bold}${italic}${cjk}">${esc(text)}</div>`;
+  return `<div class="tx${wrap}${autoWrap}" style="left:${x}pt;top:${y}pt;font-size:${size}pt;${w}${align}${bold}${italic}${cjk}">${esc(text)}</div>`;
 }
 function LN(x,y,w,h){ return `<div class="ln" style="left:${x}pt;top:${y}pt;width:${w}pt;height:${Math.max(h,0.4)}pt;"></div>`; }
 function IMGEL(x,y,w,h,src){ return `<img class="tx" style="left:${x}pt;top:${y}pt;width:${w}pt;height:${h}pt;" src="${src}">`; }
 
 const LOGO_SRC = 'data:image/png;base64,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';
 
+// 공통 상단 헤더(Seller/Buyer/Date/InvoiceNo/...) — Invoice/PackingList 좌표가 서로 달라 kind별 분리
 function headerBlockCommon(kind, si, b, sc){
   const isPl = kind === 'pl';
   const labelX = isPl ? 368.6 : 357.1;
@@ -616,12 +624,13 @@ function headerBlockCommon(kind, si, b, sc){
         pay:84.5, payV:85.8, ship:107.5, bl:129.0, etd:151.3, eta:172.4, from:194.3, to:237.4 };
 
   let h = '';
+  // 로고: IV는 Seller 블록 상단에 맞게, PL은 조금 더 상단 여백 확보
   const logoY = isPl ? 10.0 : 10.0;
   const logoH = 22.0;
   h += IMGEL(17.0, logoY, 118.0, logoH, LOGO_SRC);
   h += T(300, 22.0, 11.5, isPl?'PACKING LIST':'COMMERCIAL INVOICE', {bold:true, italic:!isPl, align:'right', w:286});
 
-  const VX = 67.5;
+  const VX = 67.5; // 값 컬럼 x — 원본 63.6에서 살짝 오른쪽으로 이동해 라벨과의 간격 확보
   h += T(17.0, Y.seller+2.8, 8.6, 'Seller', {bold:true});
   h += T(20.4, Y.exporter+2.8, 8.6, '/ Exporter', {bold:true});
   h += T(VX, Y.leenear+2.8, 8.6, 'LEENEAR CORPORATION');
@@ -634,13 +643,14 @@ function headerBlockCommon(kind, si, b, sc){
   h += T(20.4, Y.importer+2.8, 8.6, '/ Importer', {bold:true});
   h += T(VX, Y.buyerName+2.8, 8.6, si.crcf9_notify_party || '');
   h += T(VX, Y.buyerAddr1, 8.6, si.crcf9_address || '', {w:286, wrap:true});
+  // Buyer TEL/FAX: 값에 라벨이 없으면 자동으로 "TEL : " / "FAX : " 붙이기
   const buyerTel = si.crcf9_tel ? (si.crcf9_tel.match(/TEL|tel|FAX|fax/) ? si.crcf9_tel : 'TEL : ' + si.crcf9_tel) : '';
   const buyerFax = si.crcf9_fax ? (si.crcf9_fax.match(/TEL|tel|FAX|fax/) ? si.crcf9_fax : 'FAX : ' + si.crcf9_fax) : '';
   h += T(VX, Y.tel, 8.6, buyerTel);
   h += T(Y.telFaxX+4, Y.tel, 8.6, buyerFax);
 
   h += T(17.0, Y.tradeTerm, 8.6, 'Trade Term', {bold:true});
-  h += T(88.0, Y.tradeTermV, 7.2, sc.cr49f_terms_conditions_full || si.cr49f_payment_terms || '');
+  h += T(88.0, Y.tradeTermV, 7.2, sc.cr49f_terms_conditions_full || si.cr49f_payment_terms || '', {w:260, autoWrap:true});
   h += T(17.0, Y.lcNo, 8.6, 'L/C No.', {bold:true});
   h += T(VX, Y.lcNoV, 8.6, si.cr49f_lc_no || '');
   if (isPl){
@@ -655,7 +665,7 @@ function headerBlockCommon(kind, si, b, sc){
   h += T(labelX, Y.contNo, 8.6, 'Contract No', {bold:true});
   h += T(420, Y.contNo, 8.6, si.crcf9_po_vo || sc.cr49f_sale_contract_no || '', {align:'right', w:163.4});
   h += T(labelX, Y.pay, 8.6, 'Payment Term', {bold:true});
-  h += T(420, Y.payV, 7.2, si.crcf9_payment_deadline || '', {align:'right', w:163.4});
+  h += T(420, Y.payV, 7.2, si.crcf9_payment_deadline || '', {align:'right', w:163.4, autoWrap:true});
   h += T(labelX, Y.ship, 8.6, 'Shipped per', {bold:true});
   h += T(430, Y.ship, 8.6, b.cr49f_main_ship_name || '', {align:'right', w:153.4});
   h += T(labelX, Y.bl, 8.6, 'B/L No.', {bold:true});
@@ -672,14 +682,13 @@ function headerBlockCommon(kind, si, b, sc){
   h += isPl ? LNs(PL_HEADER_LINES) : LNs(IV_HEADER_LINES);
   return h;
 }
-
 // ── Invoice ──────────────────────────────────────────
 function renderInvoice(){
   const si = currentSi(S.ivSino);
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
   const b = S.booking, sc = S.saleContract;
-  const ROWH = 20.09, ROW0 = 299.94;
+  const ROWH = 20.09, ROW0 = 299.94;  // 헤더행 27pt (COMPASS 실측) + headerTopY 272.94
 
   let body = headerBlockCommon('invoice', si, b, sc);
   body += T(115.2, 283.9, 7.2, 'DESCRIPTION OF GOODS');
@@ -693,7 +702,7 @@ function renderInvoice(){
   body += tableGrid(IV_COLS, 272.94, ROWH, items.length + 1, true, 27);
 
   items.forEach((it,i) => {
-    const y = ROW0 + i*ROWH + 2.0;
+    const y = ROW0 + i*ROWH + 2.0;  // 실측: 행 상단에서 +2pt 내려서 여유 확보
     body += T(18.4, y, 7.2, it.productName);
     body += T(304.4, y, 7.2, it.bales, {align:'right', w:47.7});
     body += T(354.6, y, 7.2, fmtNum(it.weightMt), {align:'right', w:69.3});
@@ -733,14 +742,14 @@ function renderInvoice(){
   buildDocWrap('invoice', [body]);
 }
 
-// ── Packing List ──────────────────────────────────────
-const PL_ROWS_PER_PAGE = 15;
+// ── Packing List (다중 페이지 지원) ───────────────────
+const PL_ROWS_PER_PAGE = 15; // DOC-D-03 §8-6: 헤더+TOTAL+서명란 여백 확보한 안전 행수
 function renderPackingList(){
   const si = currentSi(S.ivSino);
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
   const b = S.booking, sc = S.saleContract;
-  const ROWH = 19.91, ROW0 = 287.53 + 26;
+  const ROWH = 19.91, ROW0 = 287.53 + 26;  // 헤더행 26pt (COMPASS 실측)
 
   const byDetail = {};
   S.containers.forEach(c => {
@@ -775,7 +784,7 @@ function renderPackingList(){
     body += tableGrid(PL_COLS, 287.53, ROWH, chunk.length + 1, true, 26);
 
     chunk.forEach((row, i) => {
-      const y = ROW0 + i*ROWH + 2.0;
+      const y = ROW0 + i*ROWH + 2.0;  // 실측: 행 상단에서 +2pt
       const nw = (row.c.crcf9_n_w||0)/1000, gw = (row.c.crcf9_g_w||row.c.crcf9_n_w||0)/1000;
       const rowNo = chunks.slice(0,pageIdx).reduce((s,c)=>s+c.length,0) + i + 1;
       body += T(23.8, y, 7.2, rowNo);
@@ -821,7 +830,7 @@ function substituteBlText1(text, totalBales, totalNwKg){
   return text.replace(/XXKGS/g, Math.round(totalNwKg) + 'KGS').replace(/XXBALES/g, totalBales + 'BALES');
 }
 
-const SI_ROWS_PER_PAGE2 = 18;
+const SI_ROWS_PER_PAGE2 = 18; // 2페이지(CONTAINER LOADING PLAN) 안전 행수
 function renderSI(){
   const si = currentSi(S.siSino);
   const items = aggregateItems(si.cr49f_s_iid);
@@ -846,6 +855,7 @@ function renderSI(){
   }
   descBlock += '\nFREIGHT PREPAID AS ARRANGED';
 
+  // ── Page 1: 헤더 + DESCRIPTION OF PACKAGES AND GOODS ──
   let p1 = LNs(SI0_ALL_LINES);
   p1 += T(19.6, 12.4, 5.2, 'SHIPPER');
   p1 += T(19.6, 25.0, 7.2, 'LEENEAR CORPORATION');
@@ -911,6 +921,7 @@ function renderSI(){
   p1 += T(19.6, 810.4, 7.2, 'Bill(s) of Lading');
   p1 += T(304.5, 810.4, 7.2, ':     ' + BL_TEXT[blType].split(':')[1]);
 
+  // ── Page 2+: CONTAINER LOADING PLAN (다중 페이지 지원) ──
   const ROWH2 = 19.7, ROW02 = 99.5;
   const chunks = [];
   for (let i=0;i<S.containers.length;i+=SI_ROWS_PER_PAGE2) chunks.push(S.containers.slice(i,i+SI_ROWS_PER_PAGE2));
@@ -997,7 +1008,7 @@ function buildDocWrap(which, pageBodies){
 
 
 // ══════════════════════════════════════════════════════
-// デモモード (NA2605-08 実測データ)
+// デモモード (NA2605-08 実測データ — ログイン不要プレビュー用)
 // ══════════════════════════════════════════════════════
 function loadDemo(){
   DEMO_MODE = true;
