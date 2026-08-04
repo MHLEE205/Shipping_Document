@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v1.2</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v1.3</title>
 <style>
 
 /* ── Base ── */
@@ -422,7 +422,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v1.2</span>
+    <span class="hdr-ver" id="header-sub">v1.3</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -637,7 +637,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v1.2 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v1.3 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -832,7 +832,7 @@ function setConnected(ok){
     loginBtn.style.display='none';
     logoutBtn.style.display='';
     authBar.classList.add('hidden');
-    // v1.29: 로그인 후 자동으로 업체 선택기 초기화
+    // v1.39: 로그인 후 자동으로 업체 선택기 초기화
     setTimeout(()=>initBuyerSelector(), 200);
   }else{
     chip.classList.remove('connected');
@@ -1118,7 +1118,7 @@ async function loadInvoice(ivOverride){
     ].filter(Boolean);
     S.podList=podArr;
     S.selectedPod=podArr.length>0?podArr[0]:'';
-    // v1.22: MEGA_SURYA 用 importer 情報
+    // v1.32: MEGA_SURYA 用 importer 情報
     S.importerName=parseNotifyParty(S.siHeader?.crcf9_notify_party||'');
     S.importerAddr=parseAddress(S.siHeader?.crcf9_address||'');
     S.importerTel=S.siHeader?.crcf9_tel||'';
@@ -1128,7 +1128,7 @@ async function loadInvoice(ivOverride){
     S.beneCertText=S.siHeader?.crcf9_bencert_text||'';
     S.importerEmail=S.siHeader?.crcf9_fd_mail||'';
 
-    /* Step 6: S/I Detail (v1.22: allSiList 全件・hs_code 取得、中複排除) */
+    /* Step 6: S/I Detail (v1.32: allSiList 全件・hs_code 取得、中複排除) */
     {
       const seenIds=new Set();
       const allDetails=[];
@@ -1241,7 +1241,7 @@ function renderContainerTable(){
 }
 
 /* ══════════════════════
-   POD 選択 UI (v1.2)
+   POD 選択 UI (v1.3)
 ══════════════════════ */
 function renderPodSelector(){
   const card=document.getElementById('podCard');
@@ -2433,7 +2433,7 @@ function fmtDateSlash(iso){
 }
 
 /* ══════════════════════════════════════
-   v1.22: MEGA_SURYA ヘルパー関数
+   v1.32: MEGA_SURYA ヘルパー関数
 ══════════════════════════════════════ */
 function parseNotifyParty(val){
   if(!val) return '';
@@ -2482,7 +2482,7 @@ function getShippedDetails(){
 }
 
 /* ══════════════════════════════════════
-   v1.22: Beneficiary's Certificate (MEGA SURYA)
+   v1.32: Beneficiary's Certificate (MEGA SURYA)
 ══════════════════════════════════════ */
 function renderBeneCertMegaSurya(){
   const bk=S.booking;
@@ -2572,7 +2572,7 @@ function renderBeneCertMegaSurya(){
 }
 
 /* ══════════════════════════════════════
-   v1.22: Certificate of Origin (MEGA SURYA)
+   v1.32: Certificate of Origin (MEGA SURYA)
 ══════════════════════════════════════ */
 function renderCOOMegaSurya(){
   const bk=S.booking;
@@ -2694,7 +2694,7 @@ function renderCOOMegaSurya(){
 }
 
 /* ══════════════════════════════════════
-   v1.22: ESL (MEGA SURYA) — ASPEX ESL 構造を流用
+   v1.32: ESL (MEGA SURYA) — ASPEX ESL 構造を流用
 ══════════════════════════════════════ */
 function renderESLMegaSurya(){
   const bk=S.booking;
@@ -2762,7 +2762,7 @@ function renderESLMegaSurya(){
 }
 
 /* ══════════════════════════════════════
-   v1.26: Certificate of Quality and Quantity (Vietnam 業者共用)
+   v1.36: Certificate of Quality and Quantity (Vietnam 業者共用)
 ══════════════════════════════════════ */
 function renderQQGeneric(){
   const bk=S.booking;
@@ -2834,7 +2834,7 @@ function renderQQGeneric(){
 }
 
 /* ══════════════════════════════════════
-   v1.26: Beneficiary's Certificate (DONG TIEN)
+   v1.36: Beneficiary's Certificate (DONG TIEN)
 ══════════════════════════════════════ */
 function renderBeneCertDT(){
   const bk=S.booking;
@@ -2912,7 +2912,7 @@ function renderBeneCertDT(){
 }
 
 /* ══════════════════════════════════════
-   v1.26: Beneficiary's Certificate Simple (VAN DIEM / XUAN MAI)
+   v1.36: Beneficiary's Certificate Simple (VAN DIEM / XUAN MAI)
 ══════════════════════════════════════ */
 function renderBeneCertSimple(){
   const bk=S.booking;
@@ -2958,7 +2958,7 @@ function renderBeneCertSimple(){
 }
 
 /* ══════════════════════════════════════
-   v1.27: Beneficiary's Certificate (XSD)
+   v1.37: Beneficiary's Certificate (XSD)
 ══════════════════════════════════════ */
 function renderBeneCertXSD(){
   const bk=S.booking;
@@ -3084,7 +3084,7 @@ function renderBeneCertXSD(){
 }
 
 /* ══════════════════════════════════════
-   v1.28: Beneficiary's Certificate (SIAM KRAFT)
+   v1.38: Beneficiary's Certificate (SIAM KRAFT)
 ══════════════════════════════════════ */
 function renderBeneCertSK(){
   const bk=S.booking;
@@ -3144,7 +3144,7 @@ function renderBeneCertSK(){
 }
 
 /* ══════════════════════════════════════
-   v1.27: Sent 날짜 포맷 (요일 + 월일연도)
+   v1.37: Sent 날짜 포맷 (요일 + 월일연도)
 ══════════════════════════════════════ */
 function fmtDateSent(iso){
   if(!iso) return '—';
@@ -3156,7 +3156,7 @@ function fmtDateSent(iso){
 }
 
 /* ══════════════════════════════════════
-   v1.26: Copy of Mail (TAN QUANG 専用)
+   v1.36: Copy of Mail (TAN QUANG 専用)
 ══════════════════════════════════════ */
 function renderCopyOfMail(){
   const bk=S.booking;
@@ -3244,7 +3244,7 @@ function renderCopyOfMail(){
 }
 
 /* ══════════════════════════════════════
-   v1.29: 업체에서 선택 모드
+   v1.39: 업체에서 선택 모드
 ══════════════════════════════════════ */
 
 function switchSearchMode(mode){
