@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.42</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.43</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -142,7 +142,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.42</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.43</div>
     </div>
   </div>
   <div class="header-status">
@@ -392,7 +392,7 @@ async function searchInvoice(){
         `crcf9_pod_bl1,crcf9_pod_bl2,crcf9_pod_bl3,`+
         `crcf9_bl_text1,crcf9_bl_text2,`+
         `crcf9_shipper_tel,crcf9_shipper_fax,crcf9_shipping_mark,`+
-        `crcf9_port_of_discharge,crcf9_invoice_text1,crcf9_bencert_text,crcf9_fd_mail`+
+        `crcf9_port_of_discharge,crcf9_invoice_text1,crcf9_bencert_text,crcf9_fd_mail,crcf9_local_agent_note`+
         `&$orderby=crcf9_sino asc`),
       dvGet(`crcf9_container_informations?$filter=_crcf9_booking_id_value eq ${S.booking.cr49f_bookingid}` +
         `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,_crcf9_sale_detail_id_value`),
@@ -600,7 +600,8 @@ function T(x,y,size,text,opts={}){
   const bold = opts.bold ? 'font-weight:bold;' : '';
   const italic = opts.italic ? 'font-style:italic;' : '';
   const cjk = opts.cjk ? "font-family:'Noto Sans JP',sans-serif;" : '';
-  return `<div class="tx${wrap}${autoWrap}" style="left:${x}pt;top:${y}pt;font-size:${size}pt;${w}${align}${bold}${italic}${cjk}">${esc(text)}</div>`;
+  const color = opts.color ? `color:${opts.color};` : '';
+  return `<div class="tx${wrap}${autoWrap}" style="left:${x}pt;top:${y}pt;font-size:${size}pt;${w}${align}${bold}${italic}${cjk}${color}">${esc(text)}</div>`;
 }
 function LN(x,y,w,h){ return `<div class="ln" style="left:${x}pt;top:${y}pt;width:${w}pt;height:${Math.max(h,0.4)}pt;"></div>`; }
 function IMGEL(x,y,w,h,src){ return `<img class="tx" style="left:${x}pt;top:${y}pt;width:${w}pt;height:${h}pt;" src="${src}">`; }
@@ -840,15 +841,20 @@ function renderSI(){
 
   let descBlock = '';
   const bl1 = si.crcf9_bl_text1 || '';
+  // items가 비어있을 때 siDetailCache에서 직접 fallback
+  const siDetails = S.siDetailCache[si.cr49f_s_iid] || [];
+  const prodItems = items.length > 0
+    ? items.map(i => ({productName: i.productName, hsCode: i.hsCode}))
+    : siDetails.map(d => ({productName: d.crcf9_productname || '', hsCode: d.crcf9_hs_code || ''}));
   if (bl1.includes('XX')){
     descBlock += substituteBlText1(bl1, t.totalBales, t.totalWeightMt*1000) + '\n\n';
-    if (items[0]) descBlock += items[0].productName + '\n\n';
-    if (items[0]) descBlock += items[0].hsCode + '\n\n';
+    if (prodItems[0] && prodItems[0].productName) descBlock += prodItems[0].productName + '\n\n';
+    if (prodItems[0] && prodItems[0].hsCode) descBlock += prodItems[0].hsCode + '\n\n';
     descBlock += 'L/C NO.: ' + (si.cr49f_lc_no||'') + '\n\n';
     if (si.crcf9_bl_text2) descBlock += si.crcf9_bl_text2 + '\n\n';
   } else {
-    items.forEach(i => descBlock += i.productName + '\n\n');
-    items.forEach(i => descBlock += i.hsCode + '\n');
+    prodItems.forEach(i => { if(i.productName) descBlock += i.productName + '\n\n'; });
+    prodItems.forEach(i => { if(i.hsCode) descBlock += i.hsCode + '\n'; });
     descBlock += '\n' + (si.cr49f_lc_no ? 'L/C NO.: '+si.cr49f_lc_no+'\n\n' : '');
     if (bl1) descBlock += bl1 + '\n\n';
     if (si.crcf9_bl_text2) descBlock += si.crcf9_bl_text2 + '\n';
@@ -880,6 +886,9 @@ function renderSI(){
   p1 += T(370.9, 159.6, 7.2, 'メールアドレス', {cjk:true});
   p1 += T(424.1, 159.6, 7.2, ' :       photo_rcp@leenearcorp.com');
   p1 += T(370.9, 175.1, 5.2, 'ALSO NOTIFY/DOMESTIC ROUTING/');
+  if (si.crcf9_local_agent_note) {
+    p1 += T(374.0, 184.0, 11.0, '現地Agent記載', {bold:true, color:'#cc0000', cjk:true});
+  }
   p1 += T(19.6, 213.6, 7.2, si.crcf9_tel||'');
   p1 += T(193.5, 213.6, 7.2, si.crcf9_fax||'');
   p1 += T(19.6, 227.9, 5.2, 'INITIAL CARRIAGE (MODE)');
@@ -953,7 +962,7 @@ function renderSI(){
       p2 += T(24.5, y, 6.2, rowNo);
       p2 += T(51.6, y, 6.2, c.crcf9_container_no||'');
       p2 += T(113.0, y, 6.2, c.crcf9_seal_no||'');
-      p2 += T(184.2, y, 6.2, itemNameForContainer(c), {w:150, wrap:true});
+      p2 += T(184.2, y, 6.2, itemNameForContainer(c), {w:155, autoWrap:true});
       p2 += T(345.6, y, 6.2, c.crcf9_type||'');
       p2 += T(372.84, y, 6.2, '40', {align:'right', w:49.72});
       p2 += T(430.9, y, 6.2, c.crcf9_quantity||0, {align:'right', w:10.65});
@@ -981,9 +990,16 @@ function renderSI(){
 }
 function itemNameForContainer(c){
   const key = c['_crcf9_sale_detail_id_value'] || c.crcf9_sale_detail_id;
-  const items = aggregateItems(currentSi(S.siSino).cr49f_s_iid);
+  const si = currentSi(S.siSino);
+  const items = aggregateItems(si.cr49f_s_iid);
   const it = items.find(i => i.saleDetailId === key);
-  return it ? it.productName : '';
+  if (it && it.productName) return it.productName;
+  // Fallback: siDetailCache에서 직접
+  const siDetails = S.siDetailCache[si.cr49f_s_iid] || [];
+  const detail = siDetails.find(d =>
+    (d['_crcf9_sale_detail_id_value'] || d.crcf9_sale_detail_id) === key
+  );
+  return detail ? (detail.crcf9_productname || '') : '';
 }
 
 function buildDocWrap(which, pageBodies){
