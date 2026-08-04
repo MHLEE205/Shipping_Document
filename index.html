@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.43</title>
+<title>LEENAI 通関書類(S/I・IV&amp;PL)自動生成ツール v0.44</title>
 <style>
 :root {
   --bg: #0d1117; --surface: #161b27; --surface2: #1e2438;
@@ -142,7 +142,7 @@ body { font-family: 'Meiryo', 'Noto Sans JP', sans-serif; background: var(--bg);
     <div class="logo">LN</div>
     <div>
       <div class="header-title">通関書類自動生成 (S/I・IV&amp;PL)</div>
-      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.43</div>
+      <div class="header-sub" id="headerSub">DOC-D-03 対応 / TOOL v0.44</div>
     </div>
   </div>
   <div class="header-status">
@@ -802,7 +802,8 @@ function renderPackingList(){
     if (isLast){
       const totalY = ROW0 + chunk.length*ROWH;
       body += LN(16.65, totalY, 570.49, 1.5);
-      body += T(342.6, totalY+2.0, 7.2, `TOTAL   :${S.containers.length}   Containers`);
+      body += T(18.4, totalY+2.0, 7.2, 'TOTAL');
+      body += T(270.0, totalY+2.0, 7.2, `${S.containers.length} Containers`);
       body += T(429.1, totalY+2.0, 7.2, t.totalBales, {align:'right', w:15.6});
       body += T(463.3, totalY+2.0, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:30});
       body += T(518.2, totalY+2.0, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:30});
@@ -961,9 +962,9 @@ function renderSI(){
       const rowNo = chunks.slice(0,pageIdx).reduce((s,ch)=>s+ch.length,0) + i + 1;
       p2 += T(24.5, y, 6.2, rowNo);
       p2 += T(51.6, y, 6.2, c.crcf9_container_no||'');
-      p2 += T(113.0, y, 6.2, c.crcf9_seal_no||'');
+      p2 += T(116.0, y, 6.2, c.crcf9_seal_no||'');
       p2 += T(184.2, y, 6.2, itemNameForContainer(c), {w:155, autoWrap:true});
-      p2 += T(345.6, y, 6.2, c.crcf9_type||'');
+      p2 += T(348.0, y, 6.2, c.crcf9_type||'');
       p2 += T(372.84, y, 6.2, '40', {align:'right', w:49.72});
       p2 += T(430.9, y, 6.2, c.crcf9_quantity||0, {align:'right', w:10.65});
       p2 += T(445.4, y, 6.2, 'BALES');
