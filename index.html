@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v1.6</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v1.8</title>
 <style>
 
 /* ── Base ── */
@@ -422,7 +422,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v1.6</span>
+    <span class="hdr-ver" id="header-sub">v1.8</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -637,7 +637,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v1.6 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v1.8 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -1043,8 +1043,9 @@ async function loadInvoice(ivOverride){
       `cr49f_bookings?$filter=cr49f_invoice_no eq '${encodeURIComponent(iv)}'`+
       `&$select=cr49f_bookingid,cr49f_invoice_no,cr49f_main_ship_name,`+
                `cr49f_etd,cr49f_eta,crcf9_bl_etd,crcf9_bl_eta,`+
-               `cr49f_bl_number,crcf9_bl_pol_text,`+
-               `_cr49f_sale_contract_id_value,_cr49f_carrier_id_value`+
+               `cr49f_bl_number,crcf9_bl_pol_text,crcf9_delivery_location,`+
+               `_cr49f_sale_contract_id_value,_cr49f_carrier_id_value,`+
+               `_cr49f_region_japan_id_value,_cr49f_carrier_cost_id_value`+
       `&$expand=cr49f_carrier_id($select=crcf9_carrier)&$top=1`
     );
     if(!bkgRes.value||bkgRes.value.length===0){
@@ -1084,15 +1085,16 @@ async function loadInvoice(ivOverride){
     showStatus('loadStatus','info','<span class="spin">⟳</span> 販売契約取得中...');
     S.saleContract=await dvGet(
       `cr49f_sale_contracts(${scGuid})`+
-      `?$select=cr49f_sale_contract_no,cr49f_terms_conditions,cr49f_pay_cls,cr49f_pay_days`
+      `?$select=cr49f_sale_contract_no,cr49f_terms_conditions,cr49f_terms_conditions_full,cr49f_pay_cls,cr49f_pay_days`
     );
 
     /* Step 4: Sale Detail */
     const sdRes=await dvGet(
       `cr49f_sale_details?$filter=_cr49f_sale_contract_id_value eq ${scGuid}`+
-      `&$select=cr49f_price,cr49f_quantity&$top=1`
+      `&$select=cr49f_sale_detailid,cr49f_item_id,cr49f_price,cr49f_quantity`
     );
-    S.saleDetail=sdRes.value&&sdRes.value.length>0?sdRes.value[0]:null;
+    S.saleDetails=sdRes.value||[];
+    S.saleDetail=S.saleDetails[0]||null; // 後方互換
     const priceUsd=S.saleDetail?.cr49f_price||0;
     S.amountUsd=Math.round(S.totalNwMt*priceUsd*100)/100;
     S.contractQuantityMt=S.saleDetail?.cr49f_quantity||0;
@@ -1101,11 +1103,15 @@ async function loadInvoice(ivOverride){
     showStatus('loadStatus','info','<span class="spin">⟳</span> S/I・LC番号取得中...');
     const allSiRes=await dvGet(
       `cr49f_s_is?$filter=_cr49f_sale_contract_id_value eq ${scGuid}`+
-      `&$select=cr49f_s_iid,cr49f_lc_no,crcf9_payment_classification,`+
-               `crcf9_sino,crcf9_all,crcf9_po_vo,crcf9_vo_no,`+
+      `&$select=cr49f_s_iid,cr49f_lc_no,cr49f_payment_terms,crcf9_payment_classification,`+
+               `crcf9_sino,crcf9_payment_deadline,crcf9_po_vo,crcf9_vo_no,crcf9_all,`+
+               `crcf9_consignee,crcf9_notify_party,crcf9_address,crcf9_tel,crcf9_fax,`+
                `crcf9_place_of_delivery_1,crcf9_place_of_delivery_2,crcf9_place_of_delivery_3,`+
-               `crcf9_notify_party,crcf9_address,crcf9_tel,crcf9_fax,`+
-               `crcf9_port_of_discharge,crcf9_invoice_text1,crcf9_bencert_text,crcf9_fd_mail`+
+               `crcf9_pod_bl1,crcf9_pod_bl2,crcf9_pod_bl3,`+
+               `crcf9_bl_text1,crcf9_bl_text2,`+
+               `crcf9_shipper_tel,crcf9_shipper_fax,crcf9_shipping_mark,`+
+               `crcf9_port_of_discharge,crcf9_invoice_text1,crcf9_invoicetext,`+
+               `crcf9_bencert_text,crcf9_fd_mail,crcf9_local_agent_note`+
       `&$orderby=crcf9_sino asc&$top=4`
     );
     const allSiList=allSiRes.value||[];
@@ -4261,12 +4267,14 @@ function showPreviewFD(which){
   }
 }
 
-function syncFinalDocumentState(){
+async function syncFinalDocumentState(){
   if(!S.booking) return;
   S.invoiceNo    = S.booking.cr49f_invoice_no||'';
   S.totalNwMt    = S.containers.reduce((a,c)=>a+(c.crcf9_n_w||0),0)/1000;
   S.totalBales   = S.containers.reduce((a,c)=>a+(c.crcf9_quantity||0),0);
   S.containerCount=S.containers.length;
+  // D-03 renderInvoice/renderPackingList 用: S.saleDetails 배열 보완
+  if(!S.saleDetails.length && S.saleDetail) S.saleDetails=[S.saleDetail];
   S.siHeader     = S.siList[0]||null;
   S.siDetail     = S.siHeader?(S.siDetailCache[S.siHeader.cr49f_s_iid]||[])[0]||null:null;
   S.siDetailList = Object.values(S.siDetailCache).flat();
@@ -4301,6 +4309,22 @@ function syncFinalDocumentState(){
   try{if(typeof renderDataCard==='function') renderDataCard();}catch(e){}
   try{if(typeof renderContainerTable==='function') renderContainerTable();}catch(e){}
   try{if(typeof renderPodSelector==='function') renderPodSelector();}catch(e){}
+  // regionJapan 보완 (loadInvoice 経由の場合)
+  if(!S.regionJapan && S.booking?._cr49f_region_japan_id_value){
+    try{
+      S.regionJapan=await dvGet(
+        `crcf9_region_japans(${S.booking._cr49f_region_japan_id_value})?$select=crcf9_pol`
+      );
+    }catch(e){}
+  }
+  // carrierCost 보완 (loadInvoice 経由の場合)
+  if(!S.carrierCost && S.booking?._cr49f_carrier_cost_id_value){
+    try{
+      S.carrierCost=await dvGet(
+        `crcf9_carrier_costs(${S.booking._cr49f_carrier_cost_id_value})?$select=crcf9_cost_per_van_usd,crcf9_carrier_name`
+      );
+    }catch(e){}
+  }
   try{if(typeof autoLoadLcJson==='function') autoLoadLcJson();}catch(e){}
 }
 
