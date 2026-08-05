@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v1.8</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v2.0</title>
 <style>
 
 /* ── Base ── */
@@ -422,7 +422,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v1.8</span>
+    <span class="hdr-ver" id="header-sub">v2.0</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -637,7 +637,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v1.8 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v2.0 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -1041,7 +1041,7 @@ async function loadInvoice(ivOverride){
     /* Step 1: Booking */
     const bkgRes=await dvGet(
       `cr49f_bookings?$filter=cr49f_invoice_no eq '${encodeURIComponent(iv)}'`+
-      `&$select=cr49f_bookingid,cr49f_invoice_no,cr49f_main_ship_name,`+
+      `&$select=cr49f_bookingid,cr49f_booking_no,cr49f_invoice_no,cr49f_main_ship_name,`+
                `cr49f_etd,cr49f_eta,crcf9_bl_etd,crcf9_bl_eta,`+
                `cr49f_bl_number,crcf9_bl_pol_text,crcf9_delivery_location,`+
                `_cr49f_sale_contract_id_value,_cr49f_carrier_id_value,`+
@@ -1062,8 +1062,8 @@ async function loadInvoice(ivOverride){
     showStatus('loadStatus','info','<span class="spin">⟳</span> コンテナ情報取得中...');
     const ctRes=await dvGet(
       `crcf9_container_informations?$filter=_crcf9_booking_id_value eq ${bookingId}`+
-      `&$select=crcf9_container_informationid,crcf9_n_w,crcf9_quantity,`+
-               `crcf9_container_no,crcf9_seal_no,crcf9_type,_crcf9_sale_detail_id_value&$top=50`
+      `&$select=crcf9_container_informationid,crcf9_container_no,crcf9_seal_no,crcf9_type,`+
+               `crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_g_w,crcf9_t_w,_crcf9_sale_detail_id_value`
     );
     S.containers=ctRes.value||[];
     S.totalNwMt=S.containers.reduce((a,c)=>a+(c.crcf9_n_w||0),0)/1000;
@@ -1085,7 +1085,7 @@ async function loadInvoice(ivOverride){
     showStatus('loadStatus','info','<span class="spin">⟳</span> 販売契約取得中...');
     S.saleContract=await dvGet(
       `cr49f_sale_contracts(${scGuid})`+
-      `?$select=cr49f_sale_contract_no,cr49f_terms_conditions,cr49f_terms_conditions_full,cr49f_pay_cls,cr49f_pay_days`
+      `?$select=cr49f_sale_contract_no,cr49f_terms_conditions,cr49f_pay_cls,cr49f_pay_days`
     );
 
     /* Step 4: Sale Detail */
@@ -3652,7 +3652,7 @@ function headerBlockCommon(kind, si, b, sc){
   h += T(Y.telFaxX+4, Y.tel, 8.6, buyerFax);
 
   h += T(17.0, Y.tradeTerm, 8.6, 'Trade Term', {bold:true});
-  h += T(88.0, Y.tradeTermV, 7.2, sc.cr49f_terms_conditions_full || si.cr49f_payment_terms || '', {w:260, autoWrap:true});
+  h += T(88.0, Y.tradeTermV, 7.2, sc.cr49f_terms_conditions || si.cr49f_payment_terms || '', {w:260, autoWrap:true});
   h += T(17.0, Y.lcNo, 8.6, 'L/C No.', {bold:true});
   h += T(VX, Y.lcNoV, 8.6, si.cr49f_lc_no || '');
   if (isPl){
