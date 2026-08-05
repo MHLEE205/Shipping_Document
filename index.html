@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v1.4</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v1.5</title>
 <style>
 
 /* ── Base ── */
@@ -422,7 +422,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v1.4</span>
+    <span class="hdr-ver" id="header-sub">v1.5</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -620,8 +620,8 @@ input,select{font-family:inherit;}
         <div class="doc-panel-title">IV &amp; PL — S/I 選択</div>
         <div class="sino-grid" id="ivSinoGrid2"></div>
         <div style="margin-top:10px;display:flex;gap:8px;">
-          <button class="btn btn-success" onclick="renderInvoice();showPreviewFD('invoice')">Invoice プレビュー</button>
-          <button class="btn btn-secondary" onclick="renderPackingList();showPreviewFD('pl')">Packing List プレビュー</button>
+          <button class="btn btn-success" onclick="renderInvoice();showPreview('invoice');showPreviewFD('invoice')">Invoice プレビュー</button>
+          <button class="btn btn-secondary" onclick="renderPackingList();showPreview('pl');showPreviewFD('pl')">Packing List プレビュー</button>
         </div>
       </div>
     </div>
@@ -637,7 +637,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v1.4 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v1.5 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -1110,6 +1110,7 @@ async function loadInvoice(ivOverride){
     );
     const allSiList=allSiRes.value||[];
     S.allSiList=allSiList;
+    S.siList=allSiList; // IV&PL renderIvSinoGrid2 + aggregateItems 用
     S.siHeader=allSiList.find(s=>s.crcf9_sino===1)
              ||allSiList.find(s=>s.cr49f_lc_no)
              ||(allSiList.length>0?allSiList[0]:null);
@@ -1145,6 +1146,7 @@ async function loadInvoice(ivOverride){
             `crcf9_s_i_details?$filter=_crcf9_s_i_id_value eq ${si.cr49f_s_iid}`+
             `&$select=crcf9_productname,_crcf9_sale_detail_id_value,crcf9_hs_code&$top=10`
           );
+          S.siDetailCache[si.cr49f_s_iid]=detRes.value||[]; // aggregateItems 用
           for(const d of detRes.value||[]){
             const sid=d['_crcf9_sale_detail_id_value'];
             d._si_po_vo=si.crcf9_po_vo||'';
@@ -4247,9 +4249,14 @@ function switchSubTabTsukan(name, el){
 
 function showPreviewFD(which){
   const dest=document.getElementById('fd-preview-area');
-  const wrap=document.getElementById('doc-'+which)?.closest('.doc-wrap');
-  if(wrap) dest.innerHTML=wrap.outerHTML;
-  else alert('先に通関書類タブでプレビューしてください');
+  const src=document.getElementById('previewArea');
+  if(src && src.children.length){
+    dest.innerHTML=src.innerHTML;
+    // previewArea内のdoc-wrapはshowPreviewで表示済みなのでそのまま複写
+    dest.querySelectorAll('.doc-wrap').forEach(w=>w.style.display='block');
+  } else {
+    dest.innerHTML='<div style="padding:20px;color:var(--muted);">Invoice No. を検索してから使用してください。</div>';
+  }
 }
 
 function syncFinalDocumentState(){
