@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v1.3</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v1.4</title>
 <style>
 
 /* ── Base ── */
@@ -422,7 +422,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v1.3</span>
+    <span class="hdr-ver" id="header-sub">v1.4</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -637,7 +637,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v1.3 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v1.4 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -857,7 +857,13 @@ function updateTabHighlights(){
     const el=document.getElementById('tab-'+id);
     if(el){el.classList.remove('needed','na');}
   });
-  if(S.importer==='ASPEX'){
+  if(S.importer==='ASIA_PAPER'){
+    // ASIA PAPER: Certificate 全不要
+    docTabs.forEach(id=>{
+      const el=document.getElementById('tab-'+id);
+      if(el) el.classList.add('na');
+    });
+  } else if(S.importer==='ASPEX'){
     // ASPEX: bene + esl 必要 / qq + co + ft 不要
     ['bene','esl'].forEach(id=>{
       const el=document.getElementById('tab-'+id);
@@ -999,6 +1005,7 @@ async function dvGet(path){
 function detectImporter(ivNo){
   const up=ivNo.toUpperCase();
   if(up.startsWith('NSG')) return 'SAIGON';
+  if(up.startsWith('NAS')) return 'ASIA_PAPER';
   if(up.startsWith('NA'))  return 'ASPEX';
   if(up.startsWith('NMG')) return 'MEGA_SURYA';
   if(up.startsWith('NKC')) return 'TKC_KRAFT';
@@ -1157,6 +1164,7 @@ async function loadInvoice(ivOverride){
     }
 
     showStatus('loadStatus','ok',`✅ "${iv}" のデータを取得しました。`);
+    syncFinalDocumentState();
     renderDataCard();
     renderContainerTable();
     renderPodSelector();
@@ -1485,7 +1493,20 @@ function buildAll(){
 
   // Update header badge
   const badge = document.getElementById('importerBadge');
-  if(S.importer === 'ASPEX'){
+  if(S.importer === 'ASIA_PAPER'){
+    // ASIA PAPER: 現時点 Certificate 不要 — 通関書類のみ
+    badge.textContent='[ASIA PAPER]';
+    badge.style.color='var(--info)';
+    ['qq','co','bene','ft','esl','mail'].forEach(id=>{
+      const p=document.getElementById(id==='bene'?'doc-bene':id+'-content');
+      if(p) p.innerHTML='<div class="na-panel">N/A — ASIA PAPER — 現時点 Certificate 不要</div>';
+      updateBadge('b-'+id,'N/A');
+      hideTab(id);
+    });
+    showTab('bene'); // パネル自体は見えるが内容はN/A
+    updateBadge('b-bene','N/A');
+    hideTab('esl'); hideTab('mail');
+  } else if(S.importer === 'ASPEX'){
     badge.textContent = '[ASPEX]';
     badge.style.color = 'var(--purple)';
   } else if(S.importer === 'MEGA_SURYA'){
@@ -1496,7 +1517,20 @@ function buildAll(){
     badge.style.color = 'var(--warn)';
   }
 
-  if(S.importer === 'ASPEX'){
+  if(S.importer === 'ASIA_PAPER'){
+    // ASIA PAPER: 現時点 Certificate 不要 — 通関書類のみ
+    badge.textContent='[ASIA PAPER]';
+    badge.style.color='var(--info)';
+    ['qq','co','bene','ft','esl','mail'].forEach(id=>{
+      const p=document.getElementById(id==='bene'?'doc-bene':id+'-content');
+      if(p) p.innerHTML='<div class="na-panel">N/A — ASIA PAPER — 現時点 Certificate 不要</div>';
+      updateBadge('b-'+id,'N/A');
+      hideTab(id);
+    });
+    showTab('bene'); // パネル自体は見えるが内容はN/A
+    updateBadge('b-bene','N/A');
+    hideTab('esl'); hideTab('mail');
+  } else if(S.importer === 'ASPEX'){
     // ASPEX: Bene Cert + ESL 生成、Q&Q/CO/FT は N/A
     renderBeneCertAspex();
     renderESL();
@@ -1705,7 +1739,20 @@ function certExporterImporter(){
       TEL: +81-3-3528-9850 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; FAX: +81-3-3528-9851
     </div>`;
 
-  if(S.importer === 'ASPEX'){
+  if(S.importer === 'ASIA_PAPER'){
+    // ASIA PAPER: 現時点 Certificate 不要 — 通関書類のみ
+    badge.textContent='[ASIA PAPER]';
+    badge.style.color='var(--info)';
+    ['qq','co','bene','ft','esl','mail'].forEach(id=>{
+      const p=document.getElementById(id==='bene'?'doc-bene':id+'-content');
+      if(p) p.innerHTML='<div class="na-panel">N/A — ASIA PAPER — 現時点 Certificate 不要</div>';
+      updateBadge('b-'+id,'N/A');
+      hideTab(id);
+    });
+    showTab('bene'); // パネル自体は見えるが内容はN/A
+    updateBadge('b-bene','N/A');
+    hideTab('esl'); hideTab('mail');
+  } else if(S.importer === 'ASPEX'){
     return exporterBlock + `
     <div class="cert-party-block">
       <div class="cert-exporter-label">IMPORTER</div>
@@ -2050,7 +2097,20 @@ function runLcVerify(){
     status:compassLc===jsonLc?'ok':'ng'
   });
 
-  if(S.importer === 'ASPEX'){
+  if(S.importer === 'ASIA_PAPER'){
+    // ASIA PAPER: 現時点 Certificate 不要 — 通関書類のみ
+    badge.textContent='[ASIA PAPER]';
+    badge.style.color='var(--info)';
+    ['qq','co','bene','ft','esl','mail'].forEach(id=>{
+      const p=document.getElementById(id==='bene'?'doc-bene':id+'-content');
+      if(p) p.innerHTML='<div class="na-panel">N/A — ASIA PAPER — 現時点 Certificate 不要</div>';
+      updateBadge('b-'+id,'N/A');
+      hideTab(id);
+    });
+    showTab('bene'); // パネル自体は見えるが内容はN/A
+    updateBadge('b-bene','N/A');
+    hideTab('esl'); hideTab('mail');
+  } else if(S.importer === 'ASPEX'){
     /* ── ASPEX 専用チェック ── */
 
     // 2. Bene Cert確認
