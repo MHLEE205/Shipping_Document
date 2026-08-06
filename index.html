@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v2.3</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v2.4</title>
 <style>
 
 /* ── Base ── */
@@ -281,58 +281,7 @@ input,select{font-family:inherit;}
 }
 
 /* ── Print ── */
-@media print{
-  /* margin 6mm以下 → Chrome/Edgeのブラウザヘッダー/フッター（日付・URL）を非表示 */
-  @page{size:A4;margin:12mm 15mm;}
-  /* ── アプリUI全体を非表示 ── */
-  .hdr,.big-tabs,.tabs,.auth-bar,.powered,
-  .doc-actions,.no-print,
-  #panel-search,#goPanel,#podCard,#lcCard,#ctCard,#dataCard,
-  .panel:not(.active),
-  #section-tsukan .card:not(.print-ok) { display:none!important; }
-  /* ── Certificate 領域の余白リセット ── */
-  body,html { background:#fff!important; }
-  .main { padding:0!important; max-width:100%!important; }
-  .cert-wrap { background:none!important; border:none!important; padding:0!important; margin:0!important; }
-  /* ── Certificate 상단 회사 헤더 숨김 ── */
-  .cert-hdr-bar { display:none!important; }
-  body{background:#fff!important;color:#000!important;}
-  .hdr,.tabs,.auth-bar,.doc-actions,.card,.check-wrap,.status,.lc-json-row,
-  .doc-section-title,.btn,.form-row,.no-print{display:none!important;}
-  .main{padding:0!important;max-width:100%!important;}
-  .panel{display:none!important;}
-  .panel.active{display:block!important;}
-  .cert-wrap{border:none;padding:0;margin-bottom:0;
-    break-after:page;page-break-after:always;break-inside:avoid;}
-  .cert-wrap:last-child{break-after:avoid;page-break-after:avoid;}
-  .cert-doc{display:block;}
-  .na-panel{display:none!important;}
-  /* Powered by — 全ページ最下部に固定（Wordのフッターと同じ動作） */
-  .powered{
-    display:block!important;
-    position:fixed;bottom:0;left:0;right:0;
-    text-align:center;font-size:9px;color:#888;
-    padding:3px 0;border-top:0.5px solid #ccc;
-    font-family:'Times New Roman',serif;letter-spacing:.3px;
-    background:#fff;
-  }
-  /* 全書類: flexで서명을 페이지 하단に固定 */
-  .cert-doc{
-    display:flex;flex-direction:column;
-    min-height:calc(297mm - 12mm - 12mm);
-    padding-bottom:14px;
-  }
-  .cert-spacer{flex:1;}
-  /* ESL: 1ページをflex で埋める */
-  .esl-doc{
-    display:flex;flex-direction:column;
-    min-height:calc(297mm - 12mm - 12mm);
-    padding-bottom:14px;
-  }
-  .esl-spacer{flex:1;}
-  /* ESL署名ライン: 標準と同じ65px */
-  .esl-doc .cert-sig-line{margin-top:65px;}
-}
+
 
 /* ── ESL Document ── */
 .esl-doc{
@@ -413,16 +362,58 @@ input,select{font-family:inherit;}
 .sub-tab-d03{padding:6px 16px;font-size:12px;font-weight:600;border-radius:20px;cursor:pointer;color:var(--muted);background:var(--surface2);border:1px solid var(--border);transition:all .15s;}
 .sub-tab-d03.active{background:rgba(79,142,247,.15);color:var(--accent);border-color:rgba(79,142,247,.4);}
 .ivpl-shared-note{background:rgba(63,185,80,.07);border:1px solid rgba(63,185,80,.25);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:var(--accent2);}
-@media print{
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
-  .a4-page{box-shadow:none!important;margin:0!important;page-break-after:always;}
-  .a4-page:last-child{page-break-after:auto;}
-  .doc-wrap{display:none!important;}
-  .doc-wrap.print-target{display:block!important;margin:0!important;}
-  .doc-wrap.print-target .preview-toolbar{display:none!important;}
-  @page{size:A4;margin:0;}
-}
 
+
+
+/* ════ 인쇄 분리 CSS (cert / doc) ════ */
+@media print {
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+  /* Certificate 인쇄 */
+  body[data-print="cert"]{background:#fff!important;}
+  body[data-print="cert"] .hdr,body[data-print="cert"] .big-tabs,
+  body[data-print="cert"] .tabs,body[data-print="cert"] .auth-bar,
+  body[data-print="cert"] .doc-actions,body[data-print="cert"] .no-print,
+  body[data-print="cert"] .doc-section-title,
+  body[data-print="cert"] #section-tsukan,
+  body[data-print="cert"] #panel-search,body[data-print="cert"] #goPanel,
+  body[data-print="cert"] #podCard,body[data-print="cert"] #lcCard,
+  body[data-print="cert"] #ctCard,body[data-print="cert"] #dataCard,
+  body[data-print="cert"] .panel:not(.active){display:none!important;}
+  body[data-print="cert"] .main{padding:0!important;max-width:100%!important;}
+  body[data-print="cert"] .cert-wrap{
+    background:none!important;border:none!important;
+    padding:0!important;margin:0!important;
+    break-after:page;page-break-after:always;break-inside:avoid;}
+  body[data-print="cert"] .cert-wrap:last-child{break-after:avoid;page-break-after:avoid;}
+  body[data-print="cert"] .cert-doc{
+    display:flex;flex-direction:column;
+    min-height:calc(297mm - 24mm);padding-bottom:14px;}
+  body[data-print="cert"] .cert-spacer{flex:1;}
+  body[data-print="cert"] .esl-doc{
+    display:flex;flex-direction:column;
+    min-height:calc(297mm - 24mm);padding-bottom:14px;}
+  body[data-print="cert"] .esl-spacer{flex:1;}
+  body[data-print="cert"] .esl-doc .cert-sig-line{margin-top:65px;}
+  body[data-print="cert"] .na-panel{display:none!important;}
+  body[data-print="cert"] .powered{
+    display:block!important;position:fixed;bottom:0;left:0;right:0;
+    text-align:center;font-size:9px;color:#888;padding:3px 0;
+    border-top:0.5px solid #ccc;font-family:'Times New Roman',serif;
+    letter-spacing:.3px;background:#fff;}
+  /* 通関書類 인쇄 */
+  body[data-print="doc"] .hdr,body[data-print="doc"] .big-tabs,
+  body[data-print="doc"] .tabs,body[data-print="doc"] .auth-bar,
+  body[data-print="doc"] .powered,body[data-print="doc"] #section-final,
+  body[data-print="doc"] .ctrl-col,body[data-print="doc"] .sub-tabs-d03,
+  body[data-print="doc"] .card,body[data-print="doc"] .warn-box{display:none!important;}
+  body[data-print="doc"] .doc-wrap{display:none!important;}
+  body[data-print="doc"] .doc-wrap.print-target{display:block!important;margin:0!important;}
+  body[data-print="doc"] .doc-wrap.print-target .preview-toolbar{display:none!important;}
+  body[data-print="doc"] .a4-page{box-shadow:none!important;margin:0!important;page-break-after:always;}
+  body[data-print="doc"] .a4-page:last-child{page-break-after:auto;}
+  body[data-print="doc"] .app-layout{display:block!important;}
+  body[data-print="doc"] .preview-col{max-height:none!important;position:static!important;overflow:visible!important;}
+}
 </style>
 </head>
 <body>
@@ -434,7 +425,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v2.3</span>
+    <span class="hdr-ver" id="header-sub">v2.4</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -649,7 +640,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v2.3 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v2.4 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -3478,8 +3469,17 @@ function printDocs(tab){
   const nameMap={qq:`${iv}_QQ`,co:`${iv}_CO`,bene:`${iv}_BC`,ft:`${iv}_FT`,esl:`${iv}_ESL`,mail:`${iv}_MAIL`};
   const origTitle=document.title;
   if(nameMap[tab]) document.title=nameMap[tab];
-  window.addEventListener('afterprint',()=>{document.title=origTitle;},{once:true});
   switchTab(tab);
+  // @page: Certificate用 margin
+  const ps=document.createElement('style');ps.id='_ps';
+  ps.textContent='@page{size:A4;margin:12mm 15mm;}';
+  document.head.appendChild(ps);
+  document.body.dataset.print='cert';
+  window.addEventListener('afterprint',()=>{
+    delete document.body.dataset.print;
+    document.title=origTitle;
+    document.getElementById('_ps')?.remove();
+  },{once:true});
   setTimeout(()=>window.print(),200);
 }
 
@@ -3562,14 +3562,25 @@ function showPreview(which){
 }
 
 function printPage(which){
-  const el = document.getElementById('doc-'+which);
-  if (!el){ alert('先にプレビューを表示してください'); return; }
-  // 全 doc-wrap を非表示 → print-target のみ block
-  document.querySelectorAll('.doc-wrap').forEach(w => {
+  const el=document.getElementById('doc-'+which);
+  if(!el){alert('先にプレビューを表示してください');return;}
+  document.querySelectorAll('.doc-wrap').forEach(w=>{
     w.classList.remove('print-target');
-    w.style.display = (w === el) ? 'block' : 'none';
+    w.style.display=(w===el)?'block':'none';
   });
   el.classList.add('print-target');
+  // @page: 通関書類用 margin 0
+  const ps=document.createElement('style');ps.id='_ps';
+  ps.textContent='@page{size:A4;margin:0;}';
+  document.head.appendChild(ps);
+  document.body.dataset.print='doc';
+  window.addEventListener('afterprint',()=>{
+    delete document.body.dataset.print;
+    document.getElementById('_ps')?.remove();
+    document.querySelectorAll('.doc-wrap').forEach(w=>{
+      w.classList.remove('print-target');w.style.display='';
+    });
+  },{once:true});
   window.print();
 }
 
