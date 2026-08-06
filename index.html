@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v2.5</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v2.6</title>
 <style>
 
 /* ── Base ── */
@@ -406,16 +406,13 @@ input,select{font-family:inherit;}
   body[data-print="doc"] .powered,body[data-print="doc"] #section-final,
   body[data-print="doc"] .ctrl-col,body[data-print="doc"] .sub-tabs-d03,
   body[data-print="doc"] .card,body[data-print="doc"] .warn-box{display:none!important;}
-  body[data-print="doc"] .doc-wrap{display:none!important;}
-  body[data-print="doc"] .doc-wrap.print-target{
-    display:block!important;margin:0!important;
-    position:fixed!important;top:0!important;left:0!important;
-    width:595.28pt!important;box-shadow:none!important;border:none!important;}
+  /* 通関書類 인쇄: doc-wrap을 JS에서 body 직접 자식으로 이동 */
+  body[data-print="doc"]{background:#fff!important;}
+  body[data-print="doc"] > .doc-wrap.print-target{display:block!important;margin:0!important;box-shadow:none!important;border:none!important;}
+  body[data-print="doc"] .doc-wrap:not(.print-target){display:none!important;}
   body[data-print="doc"] .doc-wrap.print-target .preview-toolbar{display:none!important;}
   body[data-print="doc"] .a4-page{box-shadow:none!important;margin:0!important;page-break-after:always;}
   body[data-print="doc"] .a4-page:last-child{page-break-after:auto;}
-  body[data-print="doc"] .app-layout{display:block!important;}
-  body[data-print="doc"] .preview-col{max-height:none!important;position:static!important;overflow:visible!important;}
 }
 </style>
 </head>
@@ -428,7 +425,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v2.5</span>
+    <span class="hdr-ver" id="header-sub">v2.6</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -643,7 +640,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v2.5 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v2.6 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -3567,22 +3564,24 @@ function showPreview(which){
 function printPage(which){
   const el=document.getElementById('doc-'+which);
   if(!el){alert('先にプレビューを表示してください');return;}
-  document.querySelectorAll('.doc-wrap').forEach(w=>{
-    w.classList.remove('print-target');
-    w.style.display=(w===el)?'block':'none';
-  });
+  // doc-wrap を body 直接子に移動 → コンテナ幅に依存しない印刷
+  const origParent=el.parentNode;
+  const origNext=el.nextSibling;
+  document.body.appendChild(el);
   el.classList.add('print-target');
-  // @page: 通関書類用 margin 0
+  el.style.display='block';
   const ps=document.createElement('style');ps.id='_ps';
   ps.textContent='@page{size:A4;margin:0;}';
   document.head.appendChild(ps);
   document.body.dataset.print='doc';
   window.addEventListener('afterprint',()=>{
+    // 元の位置に戻す
+    if(origNext) origParent.insertBefore(el,origNext);
+    else origParent.appendChild(el);
+    el.classList.remove('print-target');
+    el.style.display='';
     delete document.body.dataset.print;
     document.getElementById('_ps')?.remove();
-    document.querySelectorAll('.doc-wrap').forEach(w=>{
-      w.classList.remove('print-target');w.style.display='';
-    });
   },{once:true});
   window.print();
 }
