@@ -431,6 +431,15 @@ input,select{font-family:inherit;}
 </head>
 <body>
 
+<div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v2.7</div>
+  <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
+  <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
+  <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
+  <div id="gateStatus" style="font-size:11px;color:var(--text2);height:18px;"></div>
+</div>
+
 <!-- Header -->
 <div class="hdr">
   <div class="logo">LEEN<span>AI</span></div>
@@ -848,6 +857,8 @@ function setConnected(ok){
     loginBtn.style.display='none';
     logoutBtn.style.display='';
     authBar.classList.add('hidden');
+    const gate = document.getElementById('loginGate');
+    if (gate) gate.style.display = 'none';
     // v1.39: 로그인 후 자동으로 업체 선택기 초기화
     setTimeout(()=>initBuyerSelector(), 200);
   }else{
