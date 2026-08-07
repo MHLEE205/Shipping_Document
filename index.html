@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja" data-theme="dark">
+<html lang="ja" data-theme="leenai">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,15 +17,22 @@
   --purple:#a371f7; --info:#38bdf8; --radius:10px;
 }
 [data-theme="light"] {
-  --bg:#f4f6fb; --surface:#ffffff; --surface2:#f0f4ff; --surface3:#e8edf7;
-  --border:#d1d5db; --text:#111827; --text2:#6b7280; --text3:#9ca3af;
-  --muted:#6b7280; --muted2:#9ca3af;
+  --bg:#FAF9F8; --surface:#FFFFFF; --surface2:#F3F2F1; --surface3:#EDEBE9;
+  --border:#E1DFDD; --text:#201F1E; --text2:#605E5C; --text3:#A19F9D;
+  --muted:#605E5C; --muted2:#A19F9D;
+  --accent:#0F6CBD;
 }
 [data-theme="leenai"] {
-  --bg:#FAFDF7; --surface:#ffffff; --surface2:#F2F9EE; --surface3:#E8F5E0;
-  --border:#D0E8C0; --text:#1A3A0E; --text2:#4A6A3A; --text3:#8AAA80;
-  --muted:#4A6A3A; --muted2:#8AAA80;
-  --accent:#2D5A1E; --accent2:#2E72C8;
+  --bg:#E9EEE8; --surface:#F4F5F7; --surface2:#E1E8E0; --surface3:#D5DFD3;
+  --border:#B9C7B7; --text:#1F2A22; --text2:#4F5E52; --text3:#6D7B71;
+  --muted:#4F5E52; --muted2:#6D7B71;
+  --accent:#2F6B45; --accent2:#3F6FA8;
+}
+[data-theme="focus"] {
+  --bg:#E7EAF0; --surface:#F4F5F7; --surface2:#DDE2EA; --surface3:#CFD6E2;
+  --border:#AEB8C8; --text:#202733; --text2:#515C6C; --text3:#697587;
+  --muted:#515C6C; --muted2:#697587;
+  --accent:#315F9E; --accent2:#2F7D6A;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Segoe UI','Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;}
@@ -968,20 +975,20 @@ function updateTabHighlights(){
 function updateThemeBtn(theme){
   const btn=document.getElementById('themeToggleBtn');
   if(!btn) return;
-  const labels={dark:'🌙 ダーク',light:'☀️ ライト',leenai:'🌿 LEENAI'};
-  btn.textContent=labels[theme]||'🌙 ダーク';
+  const labels={dark:'🌙 ダーク',light:'☀️ ライト',leenai:'🌿 LEENAI',focus:'🎯 FOCUS'};
+  btn.textContent=labels[theme]||'🌿 LEENAI';
 }
 function toggleTheme(){
   const html=document.documentElement;
-  const current=html.getAttribute('data-theme')||'dark';
-  const order=['dark','light','leenai'];
+  const current=html.getAttribute('data-theme')||'leenai';
+  const order=['dark','light','leenai','focus'];
   const next=order[(order.indexOf(current)+1)%order.length];
   html.setAttribute('data-theme',next);
   localStorage.setItem('leenai_theme',next);
   updateThemeBtn(next);
 }
 (function(){
-  const saved=localStorage.getItem('leenai_theme')||'dark';
+  const saved=localStorage.getItem('leenai_theme')||'leenai';
   document.documentElement.setAttribute('data-theme',saved);
   document.addEventListener('DOMContentLoaded',()=>updateThemeBtn(saved));
 })();
@@ -4384,10 +4391,10 @@ function renderIvSinoGrid2(){
 
 /* ── 初期化 ── */
 window.addEventListener('DOMContentLoaded', async()=>{
-  const savedTheme=localStorage.getItem('leenai_theme')||'dark';
+  const savedTheme=localStorage.getItem('leenai_theme')||'leenai';
   document.documentElement.dataset.theme=savedTheme;
   const themeBtn=document.getElementById('themeToggleBtn');
-  if(themeBtn) themeBtn.textContent=savedTheme==="light"?"Light Mode":"Dark Mode";
+  if(themeBtn) updateThemeBtn(savedTheme);
   await handleCallback();
 });
 
