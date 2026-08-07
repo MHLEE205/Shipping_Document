@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v2.7</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v2.8</title>
 <style>
 
 /* ── Base ── */
@@ -433,7 +433,7 @@ input,select{font-family:inherit;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
-  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v2.7</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v2.8</div>
   <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
   <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
@@ -447,7 +447,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v2.7</span>
+    <span class="hdr-ver" id="header-sub">v2.8</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -662,7 +662,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v2.7 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v2.8 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -1967,6 +1967,7 @@ function renderBeneCert(){
     ${certHeader()}
     <div class="cert-title">Beneficiary's Certificate</div>
     <div class="cert-meta">
+      <div style="font-size:11px;color:#333;">${blDateTime}</div>
       <div>Date: &nbsp;&nbsp;&nbsp;${issuanceDate}</div>
       <div>InvoiceNo.: &nbsp;${invoiceNo}</div>
     </div>
@@ -3021,10 +3022,21 @@ function renderBeneCertDT(){
 /* ══════════════════════════════════════
    v1.36: Beneficiary's Certificate Simple (VAN DIEM / XUAN MAI)
 ══════════════════════════════════════ */
+
+/* ── 이메일 발송 일시 (B/L Date + 17~18시 랜덤) ── */
+function makeEmailSentTime(bk){
+  const raw=(bk.crcf9_bl_etd||bk.cr49f_etd||'').split('T')[0];
+  let y,mo,d;
+  if(raw){[y,mo,d]=raw.split('-').map(Number);}
+  else{const t=new Date();y=t.getFullYear();mo=t.getMonth()+1;d=t.getDate();}
+  const min=Math.floor(Math.random()*60);
+  return `${y}/${String(mo).padStart(2,'0')}/${String(d).padStart(2,'0')} 17:${String(min).padStart(2,'0')}`;
+}
 function renderBeneCertSimple(){
   const bk=S.booking;
   const invoiceNo=bk.cr49f_invoice_no;
   const issuanceDate=fmtDateEn(getEtd(bk));
+  const blDateTime=makeEmailSentTime(bk);
   const blNo=bk.cr49f_bl_number||'';
   const lc=getLcNo();
   const product=[...new Set((getShippedDetails()).map(d=>d.crcf9_productname).filter(Boolean))].join('<br>')||S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
@@ -3269,6 +3281,7 @@ function renderCopyOfMail(){
   const bk=S.booking;
   const invoiceNo=bk.cr49f_invoice_no;
   const issuanceDate=fmtDateEn(getEtd(bk));
+  const blDateTime=makeEmailSentTime(bk);
   const etdStr=fmtDateEn(getEtd(bk));
   const etaStr=fmtDateEn(getEta(bk));
   const blNo=bk.cr49f_bl_number||'—';
@@ -3292,6 +3305,7 @@ function renderCopyOfMail(){
     ${certHeader()}
     <div class="cert-title">Copy of Email</div>
     <div class="cert-meta">
+      <div style="font-size:11px;color:#333;">${blDateTime}</div>
       <div>Date : &nbsp;${issuanceDate}</div>
       <div>InvoiceNo. : &nbsp;${invoiceNo}</div>
     </div>
