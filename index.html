@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v2.7</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v2.9</title>
 <style>
 
 /* ── Base ── */
@@ -433,9 +433,7 @@ input,select{font-family:inherit;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
-  <div style="font-size:11px;color:var(--accent);font-weight:700;letter-spacing:1px;">SYS-D-03</div>
-  <div style="font-size:16px;color:var(--text);font-weight:700;">通関書類 / FINAL DOCUMENT 統合ツール</div>
-  <div style="font-size:12px;color:var(--text2);">v2.7</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v2.9</div>
   <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
   <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
@@ -449,7 +447,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v2.7</span>
+    <span class="hdr-ver" id="header-sub">v2.9</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -553,6 +551,7 @@ input,select{font-family:inherit;}
   <div class="tab" id="tab-co" onclick="switchTab('co')">② CO<span class="tab-badge" id="b-co">—</span></div>
   <div class="tab" id="tab-bene" onclick="switchTab('bene')">③ Beneficiary Cert<span class="tab-badge" id="b-bene">—</span></div>
   <div class="tab" id="tab-ft" onclick="switchTab('ft')">④ Free Time Cert<span class="tab-badge" id="b-ft">—</span></div>
+  <div class="tab" id="tab-bene-mail" onclick="switchTab('bene-mail')" style="display:none">📧 Bene+MAIL<span class="tab-badge" id="b-bene-mail">—</span></div>
   <div class="tab" id="tab-esl" onclick="switchTab('esl')" style="display:none">⑤ ESL<span class="tab-badge" id="b-esl">—</span></div>
   <div class="tab" id="tab-mail" onclick="switchTab('mail')" style="display:none">📧 COPY OF MAIL<span class="tab-badge" id="b-mail">—</span></div>
   <div class="tab" id="tab-ivpl-fd" onclick="switchTab('ivpl-fd')">📄 IV &amp; PL</div>
@@ -630,7 +629,15 @@ input,select{font-family:inherit;}
     <div class="doc-actions no-print"><button class="btn btn-success" onclick="printDocs('ft')">🖨 印刷 (1部)</button></div>
     <div id="ft-content"><div class="doc-section-title">Free Time Certificate</div><div class="cert-wrap"><div class="cert-doc" id="doc-ft"></div></div></div>
   </div>
-  <div class="panel" id="panel-esl">
+  <div class="panel" id="panel-bene-mail">
+    <div class="doc-actions no-print">
+      <button class="btn btn-success" onclick="printDocs('bene-mail')">🖨 印刷 (1部)</button>
+    </div>
+    <div class="doc-section-title">Beneficiary's Certificate + Email</div>
+    <div class="cert-wrap"><div class="cert-doc" id="doc-bene-mail"></div></div>
+  </div>
+
+    <div class="panel" id="panel-esl">
     <div class="doc-actions no-print"><button class="btn btn-success" onclick="printDocs('esl')">🖨 印刷 (1部)</button></div>
     <div class="doc-section-title">Exporter's Statement Letter</div>
     <div class="cert-wrap"><div class="esl-doc" id="doc-esl"></div></div>
@@ -664,7 +671,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v2.7 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v2.9 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -1640,6 +1647,11 @@ function buildAll(){
     } else if(['VAN_DIEM','XUAN_MAI'].includes(S.importer)){
       renderBeneCertSimple();
       updateBadge('b-bene','✓');
+      if(S.importer==='XUAN_MAI'){
+        renderBeneCertMailNXM();
+        showTab('bene-mail');
+        updateBadge('b-bene-mail','✓');
+      }
     } else {
       renderNAForPanel('bene-na-placeholder','この業者は Beneficiary Certificate 不要');
       document.getElementById('doc-bene').innerHTML='<div class="na-panel">N/A — この業者は Beneficiary Certificate 不要</div>';
@@ -1969,6 +1981,7 @@ function renderBeneCert(){
     ${certHeader()}
     <div class="cert-title">Beneficiary's Certificate</div>
     <div class="cert-meta">
+      <div style="font-size:11px;color:#333;">${blDateTime}</div>
       <div>Date: &nbsp;&nbsp;&nbsp;${issuanceDate}</div>
       <div>InvoiceNo.: &nbsp;${invoiceNo}</div>
     </div>
@@ -3023,10 +3036,130 @@ function renderBeneCertDT(){
 /* ══════════════════════════════════════
    v1.36: Beneficiary's Certificate Simple (VAN DIEM / XUAN MAI)
 ══════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════
+   renderBeneCertMailNXM: XUAN_MAI 専用 Bene+MAIL
+   = FREE TIME Bene Cert + Email Simulation (한 장)
+══════════════════════════════════════════════════════════ */
+function renderBeneCertMailNXM(){
+  const bk=S.booking;
+  const invoiceNo=bk.cr49f_invoice_no;
+  const issuanceDate=fmtDateEn(getEtd(bk));
+  const blDateTime=makeEmailSentTime(bk);
+  const blNo=bk.cr49f_bl_number||'—';
+  const blDate=fmtDateEn(getEtd(bk));
+  const etdStr=fmtDateEn(getEtd(bk));
+  const etaStr=fmtDateEn(getEta(bk));
+  const vessel=bk.cr49f_main_ship_name||'—';
+  const carrier=S.carrierName||'—';
+  const bookingNo=bk.cr49f_booking_no||'—';
+  const pol=bk.crcf9_bl_pol_text||'—';
+  const polJapan=pol.toUpperCase().includes('JAPAN')?pol:pol+', JAPAN';
+  const pod=getPortOfDestination()||'—';
+  const lc=getLcNo();
+  const product=[...new Set((getShippedDetails()).map(d=>d.crcf9_productname).filter(Boolean))].join('<br>')||S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
+  const ctCount=S.containers.length;
+  const ctType=[...new Set(S.containers.map(c=>c.crcf9_type).filter(Boolean))].join('/')||'40\'';
+  const ctSummary=ctCount>0?`${ctCount} Con (${ctType})`:'—';
+  const toEmail=S.importerEmail||S.importerName||'—';
+  const nwMt=S.totalNwMt.toFixed(2);
+
+  const declare=S.beneCertText||
+    'LEAST 10 DAYS FREE TIME OF DEMURRAGE AND 04 DAYS OF DETENTION AT DESTINATION PORT.';
+
+  document.getElementById('doc-bene-mail').innerHTML=`
+    ${certHeader()}
+    <div class="cert-title" style="font-size:15px;">Beneficiary\'s Certificate</div>
+    <div class="cert-meta">
+      <div style="font-size:11px;color:#333;">${blDateTime}</div>
+      <div>Date: &nbsp;&nbsp;&nbsp;${issuanceDate}</div>
+      <div>InvoiceNo.: &nbsp;${invoiceNo}</div>
+    </div>
+    <div class="cert-party-block" style="font-size:12px;margin-bottom:5px;">
+      <div class="cert-exporter-label">EXPORTER</div>
+      LEENEAR CORPORATION<br>
+      ADD: VORT SUIDOBASHI 3 5FL, 2-8-11 KANDASARUGAKUCHO, CHIYODA, TOKYO, JAPAN, 101-0064<br>
+      TEL: +81-3-3528-9850 &nbsp;&nbsp; FAX: +81-3-3528-9851
+    </div>
+    <div class="cert-party-block" style="font-size:12px;margin-bottom:6px;">
+      <div class="cert-exporter-label">IMPORTER</div>
+      ${S.importerName||'—'}<br>
+      ${S.importerAddr?'ADD: '+S.importerAddr:''}
+    </div>
+    <div class="ft-declare" style="font-size:12.5px;margin-bottom:6px;">
+      WE, LEENEAR CORPORATION HEREBY DECLARE THAT: ${declare}
+    </div>
+    <div class="cert-items" style="font-size:12px;margin-bottom:6px;">
+      <div class="cert-item"><span class="cert-bullet">•</span><span class="cert-item-label">L/C NO.</span><span class="cert-item-val">${lc}</span></div>
+      <div class="cert-item"><span class="cert-bullet">•</span><span class="cert-item-label">DESCRIPTION OF GOODS</span><span class="cert-item-val">${product}</span></div>
+      ${blNo&&blNo!=='—'?`<div class="cert-item"><span class="cert-bullet">•</span><span class="cert-item-label">B/L No.</span><span class="cert-item-val">${blNo}</span></div>`:''}
+    </div>
+
+    <!-- Email Simulation Box -->
+    <div style="border:1px solid #999;padding:7px 9px;margin-bottom:7px;font-size:10.5px;line-height:1.45;background:#fafafa;">
+      <div style="margin-bottom:2px;">
+        <span style="font-weight:700;">From:</span> rcp@leenearcorp.com &nbsp;&nbsp;
+        <span style="font-weight:700;">To:</span> ${toEmail}
+      </div>
+      <div style="margin-bottom:4px;">
+        <span style="font-weight:700;">Subject:</span> Shipping docs for ${invoiceNo}
+        &nbsp;&nbsp;
+        <span style="font-weight:700;color:#555;">Date:</span> ${blDateTime}
+      </div>
+      <div style="margin-bottom:3px;font-size:10px;color:#666;">📎 ${invoiceNo}_FD.pdf</div>
+      <div style="margin-bottom:4px;">Dear Tian,<br>Please kindly find shipping document copy of ${invoiceNo}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:9.5px;">
+        <tr style="background:#444;color:#fff;">
+          <th style="padding:2px 3px;text-align:left;">ETD</th>
+          <th style="padding:2px 3px;text-align:left;">ETA</th>
+          <th style="padding:2px 3px;text-align:left;">Invoice No.</th>
+          <th style="padding:2px 3px;text-align:left;">Carrier</th>
+          <th style="padding:2px 3px;text-align:left;">Vessel</th>
+          <th style="padding:2px 3px;text-align:left;">Booking No.</th>
+          <th style="padding:2px 3px;text-align:left;">BL No.</th>
+          <th style="padding:2px 3px;text-align:left;">POL</th>
+          <th style="padding:2px 3px;text-align:left;">POD</th>
+          <th style="padding:2px 3px;text-align:right;">Container</th>
+          <th style="padding:2px 3px;text-align:right;">N/W(MT)</th>
+        </tr>
+        <tr style="background:#ffffcc;">
+          <td style="padding:2px 3px;border:1px solid #ccc;">${etdStr}</td>
+          <td style="padding:2px 3px;border:1px solid #ccc;">${etaStr}</td>
+          <td style="padding:2px 3px;border:1px solid #ccc;">${invoiceNo}</td>
+          <td style="padding:2px 3px;border:1px solid #ccc;">${carrier}</td>
+          <td style="padding:2px 3px;border:1px solid #ccc;">${vessel}</td>
+          <td style="padding:2px 3px;border:1px solid #ccc;">${bookingNo}</td>
+          <td style="padding:2px 3px;border:1px solid #ccc;">${blNo}</td>
+          <td style="padding:2px 3px;border:1px solid #ccc;">${polJapan}</td>
+          <td style="padding:2px 3px;border:1px solid #ccc;">${pod}</td>
+          <td style="padding:2px 3px;border:1px solid #ccc;text-align:right;">${ctSummary}</td>
+          <td style="padding:2px 3px;border:1px solid #ccc;text-align:right;">${nwMt}</td>
+        </tr>
+      </table>
+      <div style="margin-top:4px;font-weight:700;font-size:9.5px;">✦ LEENEAR CORPORATION &nbsp;|&nbsp; rcp@leenearcorp.com &nbsp;|&nbsp; TEL: +81-3-3528-9850</div>
+    </div>
+
+    <div class="cert-confirm-bold" style="font-size:12.5px;margin-bottom:4px;">WE HEREBY CERTIFY THAT THE ABOVE INFORMATION IS TRUE AND CORRECT.</div>
+    ${certBottom()}
+    <div class="cert-spacer"></div>
+    ${certSig()}`;
+}
+
+
+/* ── 이메일 발송 일시 (B/L Date + 17~18시 랜덤) ── */
+function makeEmailSentTime(bk){
+  const raw=(bk.crcf9_bl_etd||bk.cr49f_etd||'').split('T')[0];
+  let y,mo,d;
+  if(raw){[y,mo,d]=raw.split('-').map(Number);}
+  else{const t=new Date();y=t.getFullYear();mo=t.getMonth()+1;d=t.getDate();}
+  const min=Math.floor(Math.random()*60);
+  return `${y}/${String(mo).padStart(2,'0')}/${String(d).padStart(2,'0')} 17:${String(min).padStart(2,'0')}`;
+}
 function renderBeneCertSimple(){
   const bk=S.booking;
   const invoiceNo=bk.cr49f_invoice_no;
   const issuanceDate=fmtDateEn(getEtd(bk));
+  const blDateTime=makeEmailSentTime(bk);
   const blNo=bk.cr49f_bl_number||'';
   const lc=getLcNo();
   const product=[...new Set((getShippedDetails()).map(d=>d.crcf9_productname).filter(Boolean))].join('<br>')||S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
@@ -3271,6 +3404,7 @@ function renderCopyOfMail(){
   const bk=S.booking;
   const invoiceNo=bk.cr49f_invoice_no;
   const issuanceDate=fmtDateEn(getEtd(bk));
+  const blDateTime=makeEmailSentTime(bk);
   const etdStr=fmtDateEn(getEtd(bk));
   const etaStr=fmtDateEn(getEta(bk));
   const blNo=bk.cr49f_bl_number||'—';
@@ -3294,6 +3428,7 @@ function renderCopyOfMail(){
     ${certHeader()}
     <div class="cert-title">Copy of Email</div>
     <div class="cert-meta">
+      <div style="font-size:11px;color:#333;">${blDateTime}</div>
       <div>Date : &nbsp;${issuanceDate}</div>
       <div>InvoiceNo. : &nbsp;${invoiceNo}</div>
     </div>
