@@ -4173,7 +4173,7 @@ function renderPackingList(){
       const totalY = ROW0 + chunk.length*ROWH;
       body += LN(16.65, totalY, 570.49, 1.5);
       body += T(18.4, totalY+2.0, 7.2, 'TOTAL');
-      body += T(270.0, totalY+2.0, 7.2, `${S.containers.length} Containers`);
+      body += T(120.0, totalY+2.0, 7.2, `${S.containers.length} Containers`);
       body += T(429.1, totalY+2.0, 7.2, t.totalBales, {align:'right', w:15.6});
       body += T(463.3, totalY+2.0, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:30});
       body += T(518.2, totalY+2.0, 7.2, fmtNum(t.totalWeightMt), {align:'right', w:30});
