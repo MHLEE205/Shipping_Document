@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.7</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.8</title>
 <style>
 
 /* ── Base ── */
@@ -435,7 +435,7 @@ input,select{font-family:inherit;}
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
   <div style="font-size:11px;color:#fff;background:var(--accent);padding:2px 10px;border-radius:12px;font-weight:700;letter-spacing:1px;">SYS-D-03</div>
-  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.7</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.8</div>
   <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
   <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
@@ -449,7 +449,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v3.7</span>
+    <span class="hdr-ver" id="header-sub">v3.8</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -610,6 +610,14 @@ input,select{font-family:inherit;}
         </tr></thead><tbody id="ctBody"></tbody><tfoot id="ctFoot"></tfoot>
       </table></div>
     </div>
+    <div class="card" id="siCard" style="display:none">
+      <div class="card-title" style="align-items:center;gap:10px;">
+        📋 S/I 選択
+        <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">Certificate 発行対象の S/I を選択</span>
+      </div>
+      <div class="sino-grid" id="fdSinoGrid"></div>
+    </div>
+
     <div id="goPanel" style="display:none;margin-top:4px;">
       <button class="btn btn-success" onclick="buildAll()">✅ 全書類を生成 → 各タブへ</button>
     </div>
@@ -673,7 +681,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.7 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.8 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -733,6 +741,7 @@ const S = {
   goodsType: 'OCC', docs46A: [], addCond47A: '',
   invoiceNo: '',
   buyerMap: {}, buyerBookingsMap: {},
+  fdSino: 1, // FINAL DOCUMENT S/I 선택 번호
   importer: 'SAIGON', allSiList: [],
   contractQuantityMt: 0, bankType: '',
 };
@@ -1133,6 +1142,10 @@ async function loadInvoice(ivOverride){
       renderPodSelector();
       document.getElementById('lcCard').style.display='';
       document.getElementById('goPanel').style.display='';
+    if(S.siList.length>0){
+      document.getElementById('siCard').style.display='';
+      renderFdSinoGrid();
+    }
       autoLoadLcJson();
       return;
     }
@@ -1234,6 +1247,10 @@ async function loadInvoice(ivOverride){
     renderPodSelector();
     document.getElementById('lcCard').style.display='';
     document.getElementById('goPanel').style.display='';
+    if(S.siList.length>0){
+      document.getElementById('siCard').style.display='';
+      renderFdSinoGrid();
+    }
     autoLoadLcJson();
 
   }catch(e){
@@ -4491,7 +4508,10 @@ async function syncFinalDocumentState(){
   S.containerCount=S.containers.length;
   // D-03 renderInvoice/renderPackingList 用: S.saleDetails 배열 보완
   if(!S.saleDetails.length && S.saleDetail) S.saleDetails=[S.saleDetail];
-  S.siHeader     = S.siList[0]||null;
+  // FINAL DOCUMENT S/I 선택 기준으로 siHeader 결정
+  const _fdSi = S.siList.find(s=>s.crcf9_sino===S.fdSino)||S.siList[0]||null;
+  S.siHeader = _fdSi;
+  if(_fdSi) S.fdSino = _fdSi.crcf9_sino||1;
   S.siDetail     = S.siHeader?(S.siDetailCache[S.siHeader.cr49f_s_iid]||[])[0]||null:null;
   S.siDetailList = Object.values(S.siDetailCache).flat();
   S.saleDetail   = S.saleDetails[0] || null;
@@ -4516,6 +4536,9 @@ async function syncFinalDocumentState(){
   }
   S.importer=detectImporter(S.invoiceNo);
   renderIvSinoGrid2();
+  // siCard 표시
+  const siCard=document.getElementById('siCard');
+  if(siCard&&S.siList.length>0) siCard.style.display='';
   const notice=document.getElementById('ivpl-fd-notice');
   const actions=document.getElementById('ivpl-fd-actions');
   if(notice) notice.style.display='none';
@@ -4523,6 +4546,7 @@ async function syncFinalDocumentState(){
   const ivInput=document.getElementById('ivInput');
   if(ivInput) ivInput.value=S.invoiceNo;
   try{if(typeof renderDataCard==='function') renderDataCard();}catch(e){}
+  renderFdSinoGrid();
   try{if(typeof renderContainerTable==='function') renderContainerTable();}catch(e){}
   try{if(typeof renderPodSelector==='function') renderPodSelector();}catch(e){}
   // regionJapan 보완 (loadInvoice 経由の場合)
@@ -4542,6 +4566,43 @@ async function syncFinalDocumentState(){
     }catch(e){}
   }
   try{if(typeof autoLoadLcJson==='function') autoLoadLcJson();}catch(e){}
+}
+
+/* ── FINAL DOCUMENT S/I 선택기 ── */
+function renderFdSinoGrid(){
+  const grid=document.getElementById('fdSinoGrid');
+  if(!grid||!S.siList.length) return;
+  const avail=S.siList.map(s=>s.crcf9_sino);
+  grid.innerHTML=[1,2,3,4].map(n=>{
+    const dis=!avail.includes(n)?'disabled':'';
+    const chk=n===S.fdSino?'checked':'';
+    return `<label class="radio-row"><input type="radio" name="fdSino" value="${n}" ${chk} ${dis} onchange="setFdSino(${n})"> S/I${'①②③④'[n-1]}</label>`;
+  }).join('');
+}
+
+function setFdSino(n){
+  S.fdSino=n;
+  const si=S.siList.find(s=>s.crcf9_sino===n)||S.siList[0];
+  if(!si) return;
+  S.siHeader=si;
+  S.importerName = typeof parseNotifyParty==='function' ? parseNotifyParty(si.crcf9_notify_party||'') : si.crcf9_notify_party||'';
+  S.importerAddr  = typeof parseAddress==='function'     ? parseAddress(si.crcf9_address||'')         : si.crcf9_address||'';
+  S.importerTel   = si.crcf9_tel||'';
+  S.importerFax   = si.crcf9_fax||'';
+  S.portOfDischarge = si.crcf9_port_of_discharge||'';
+  S.invoiceText1  = si.crcf9_invoice_text1||'';
+  S.beneCertText  = si.crcf9_bencert_text||'';
+  S.importerEmail = si.crcf9_fd_mail||'';
+  const podArr=[si.crcf9_place_of_delivery_1,si.crcf9_place_of_delivery_2,si.crcf9_place_of_delivery_3].filter(Boolean);
+  S.podList=podArr; S.selectedPod=podArr[0]||'';
+  S.allText  = si.crcf9_all||'';
+  S.poVo     = si.crcf9_po_vo||'';
+  S.voNo     = si.crcf9_vo_no||'';
+  S.importer = detectImporter(S.invoiceNo);
+  // dataCard 갱신
+  try{ if(typeof renderDataCard==='function') renderDataCard(); }catch(e){}
+  // podCard 갱신
+  try{ if(typeof renderPodSelector==='function') renderPodSelector(); }catch(e){}
 }
 
 function renderIvSinoGrid2(){
