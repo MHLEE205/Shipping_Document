@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.0</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.1</title>
 <style>
 
 /* ── Base ── */
@@ -433,7 +433,7 @@ input,select{font-family:inherit;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
-  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.0</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.1</div>
   <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
   <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
@@ -447,7 +447,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v3.0</span>
+    <span class="hdr-ver" id="header-sub">v3.1</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -671,7 +671,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.0 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.1 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -702,8 +702,8 @@ const PL_ROWS_PER_PAGE  = 15;
 const SI_ROWS_PER_PAGE2 = 18;
 const BL_TEXT = {
   original: 'Bill(s) of Lading   :   (3 ORIGINALS with NON-NEGOTIABLE COPY)',
-  surrender: 'Bill(s) of Lading   :   (SURRENDERED) ※文言未確認',
-  waybill:   'Bill(s) of Lading   :   (SEA WAYBILL) ※文言未確認',
+  surrender: 'Bill(s) of Lading   :   (SURRENDERED)',
+  waybill:   'Bill(s) of Lading   :   (SEA WAYBILL)',
 };
 const LOGO_SRC = 'data:image/png;base64,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';
 
@@ -4210,13 +4210,13 @@ function renderSI(){
     descBlock += 'L/C NO.: ' + (si.cr49f_lc_no||'') + '\n\n';
     if (si.crcf9_bl_text2) descBlock += si.crcf9_bl_text2 + '\n\n';
   } else {
-    prodItems.forEach(i => { if(i.productName) descBlock += i.productName + '\n\n'; });
+    prodItems.forEach(i => { if(i.productName) descBlock += i.productName + '\n'; });
     prodItems.forEach(i => { if(i.hsCode) descBlock += i.hsCode + '\n'; });
-    descBlock += '\n' + (si.cr49f_lc_no ? 'L/C NO.: '+si.cr49f_lc_no+'\n\n' : '');
-    if (bl1) descBlock += bl1 + '\n\n';
+    descBlock += (si.cr49f_lc_no ? 'L/C NO.: '+si.cr49f_lc_no+'\n' : '');
+    if (bl1) descBlock += bl1 + '\n';
     if (si.crcf9_bl_text2) descBlock += si.crcf9_bl_text2 + '\n';
   }
-  descBlock += '\nFREIGHT PREPAID AS ARRANGED';
+  descBlock += 'FREIGHT PREPAID AS ARRANGED';
 
   // ── Page 1: 헤더 + DESCRIPTION OF PACKAGES AND GOODS ──
   let p1 = LNs(SI0_ALL_LINES);
