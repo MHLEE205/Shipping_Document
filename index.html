@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.12</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.13</title>
 <style>
 
 /* ── Base ── */
@@ -435,7 +435,7 @@ input,select{font-family:inherit;}
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
   <div style="font-size:11px;color:#fff;background:var(--accent);padding:2px 10px;border-radius:12px;font-weight:700;letter-spacing:1px;">SYS-D-03</div>
-  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.12</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.13</div>
   <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
   <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
@@ -449,7 +449,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v3.12</span>
+    <span class="hdr-ver" id="header-sub">v3.13</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -502,8 +502,16 @@ input,select{font-family:inherit;}
               <div class="sub-box-title">POD (Place of Delivery)</div>
               <div id="ivPodGrid"></div>
             </div>
+            <div class="sub-box">
+              <div class="sub-box-title">運賃表示設定</div>
+              <label class="check-row">
+                <input type="checkbox" id="showFreightTsukanCheck" checked
+                  onchange="S.showFreightTsukan=this.checked">
+                FOB 運賃 含む (Freight / Insurance / FOB)
+              </label>
+            </div>
             <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn-d03 small" onclick="renderInvoice();showPreview('invoice')">Invoice プレビュー</button>
+              <button class="btn-d03 small" onclick="S.showFreight=S.showFreightTsukan;renderInvoice();showPreview('invoice')">Invoice プレビュー</button>
               <button class="btn-d03 small secondary" onclick="renderPackingList();showPreview('pl')">Packing List プレビュー</button>
             </div>
           </div>
@@ -663,8 +671,16 @@ input,select{font-family:inherit;}
       <div class="doc-panel" style="max-width:500px;margin-bottom:14px;">
         <div class="doc-panel-title">IV &amp; PL — S/I 選択</div>
         <div class="sino-grid" id="ivSinoGrid2"></div>
+        <div class="sub-box" style="margin-bottom:10px;">
+          <div class="sub-box-title">運賃表示設定</div>
+          <label class="check-row">
+            <input type="checkbox" id="showFreightFDCheck"
+              onchange="S.showFreightFD=this.checked">
+            FOB 運賃 含む (Freight / Insurance / FOB)
+          </label>
+        </div>
         <div style="margin-top:10px;display:flex;gap:8px;">
-          <button class="btn btn-success" onclick="renderInvoice();showPreview('invoice');showPreviewFD('invoice')">Invoice プレビュー</button>
+          <button class="btn btn-success" onclick="S.showFreight=S.showFreightFD;renderInvoice();showPreview('invoice');showPreviewFD('invoice')">Invoice プレビュー</button>
           <button class="btn btn-secondary" onclick="renderPackingList();showPreview('pl');showPreviewFD('pl')">Packing List プレビュー</button>
         </div>
       </div>
@@ -681,7 +697,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.12 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.13 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -742,6 +758,9 @@ const S = {
   invoiceNo: '',
   buyerMap: {}, buyerBookingsMap: {},
   fdSino: 1, // FINAL DOCUMENT S/I 선택 번호
+  showFreight: true,       // 現在のIV運賃表示フラグ
+  showFreightTsukan: true, // 通関書類タブ デフォルト: ON
+  showFreightFD: false,    // FINAL DOCUMENTタブ デフォルト: OFF
   importer: 'SAIGON', allSiList: [],
   contractQuantityMt: 0, bankType: '',
 };
@@ -4107,6 +4126,7 @@ function renderInvoice(){
     const parts = [si.crcf9_invoicetext||'', si.crcf9_all||''].filter(Boolean);
     if(parts.length) body += T(27.8, totalY+40, 7.2, parts.join('\n'), {w:260, autoWrap:true});
   }
+  if(S.showFreight){
   if(t.isCIF){
     // CIF: FREIGHT + INSURANCE PREMIUM + FOB (3줄)
     body += T(303.3, totalY+39.8, 8.6, 'FREIGHT');
@@ -4124,6 +4144,7 @@ function renderInvoice(){
     body += T(303.3, totalY+57.5, 8.6, 'FOB(FREE ON BOARD)');
     body += T(523.4, totalY+57.5, 8.6, 'US$ '+fmtNum(t.fob));
   }
+  } // end if(S.showFreight)
   body += T(372.9, 736.8, 8.6, 'LEENEAR CORPORATION');
   body += LN(371.5, 785.0, 215.3, 1.4);
   body += T(372.9, 789.9, 8.6, S.signerName || 'LEENEAR');
