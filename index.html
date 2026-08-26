@@ -4588,7 +4588,7 @@ function downloadExcel(){
     ['Shipping Mark',si?.crcf9_shipping_mark||'NO MARK'],
     [],
     ['品目','Bales','Weight(MT)','Unit Price(US$/MT)','CIF Amount(US$)'],
-    ...items.map(it=>[it.productName,it.totalBales,+it.totalWeightMt.toFixed(2),it.price,+it.cifAmount.toFixed(2)]),
+    ...items.map(it=>[it.productName,it.bales,+it.weightMt.toFixed(2),it.price,+it.cifAmount.toFixed(2)]),
     ['TOTAL',t.totalBales,+t.totalWeightMt.toFixed(2),'',+t.cifTotal.toFixed(2)],
     [],
     ['FREIGHT',`US$ ${fmtNum(t.freight)}`],
