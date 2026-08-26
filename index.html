@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.17</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.18</title>
 <style>
 
 /* ── Base ── */
@@ -429,13 +429,14 @@ input,select{font-family:inherit;}
   body[data-print="doc"] .a4-page + .a4-page{page-break-before:always;}
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
   <div style="font-size:11px;color:#fff;background:var(--accent);padding:2px 10px;border-radius:12px;font-weight:700;letter-spacing:1px;">SYS-D-03</div>
-  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.17</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.18</div>
   <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
   <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
@@ -449,7 +450,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v3.17</span>
+    <span class="hdr-ver" id="header-sub">v3.18</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -488,54 +489,41 @@ input,select{font-family:inherit;}
         <div class="card-title">🚢 ブッキング概要</div>
         <div class="summary-grid" id="summaryGrid"></div>
       </div>
-      <div class="sub-tabs-d03">
-        <div class="sub-tab-d03 active" onclick="switchSubTabTsukan('ivpl',this)">IV &amp; PL</div>
-        <div class="sub-tab-d03" onclick="switchSubTabTsukan('si',this)">S/I 船積指示書</div>
-      </div>
-      <div id="tsukan-sub-ivpl">
-        <div class="card">
-          <div class="card-title">📑 IV &amp; PL 発行</div>
-          <div class="doc-panel">
-            <div class="doc-panel-title">S/I 選択</div>
-            <div class="sino-grid" id="ivSinoGrid"></div>
-            <div class="sub-box">
-              <div class="sub-box-title">POD (Place of Delivery)</div>
-              <div id="ivPodGrid"></div>
-            </div>
-            <div class="sub-box">
-              <div class="sub-box-title">運賃表示設定</div>
-              <label class="check-row">
-                <input type="checkbox" id="showFreightTsukanCheck" checked
-                  onchange="S.showFreightTsukan=this.checked">
-                FOB 運賃 含む (Freight / Insurance / FOB)
-              </label>
-            </div>
-            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn-d03 small" onclick="S.showFreight=S.showFreightTsukan;renderInvoice();showPreview('invoice')">Invoice プレビュー</button>
-              <button class="btn-d03 small secondary" onclick="renderPackingList();showPreview('pl')">Packing List プレビュー</button>
-            </div>
+      <div class="card">
+        <div class="card-title">📑 通関書類 発行 (IV · PL · S/I)</div>
+        <div class="doc-panel">
+          <div class="doc-panel-title">S/I 選択</div>
+          <div class="sino-grid" id="ivSinoGrid"></div>
+          <div id="siSinoGrid" style="display:none"></div>
+          <div class="sub-box">
+            <div class="sub-box-title">POD — IV · PL 用</div>
+            <div id="ivPodGrid"></div>
           </div>
-        </div>
-      </div>
-      <div id="tsukan-sub-si" style="display:none">
-        <div class="card">
-          <div class="card-title">🚢 S/I 発行</div>
-          <div class="doc-panel">
-            <div class="doc-panel-title">S/I 選択</div>
-            <div class="sino-grid" id="siSinoGrid"></div>
-            <div class="sub-box">
-              <div class="sub-box-title">POD (BL用)</div>
-              <div id="siPodGrid"></div>
-            </div>
-            <div class="sub-box">
-              <div class="sub-box-title">B/L 発行形態</div>
-              <label class="radio-row"><input type="radio" name="blType" value="original" checked onchange="renderSI()"> Original B/L</label>
-              <label class="radio-row"><input type="radio" name="blType" value="surrender" onchange="renderSI()"> SURRENDER <span class="todo-flag">文言未確認</span></label>
-              <label class="radio-row"><input type="radio" name="blType" value="waybill" onchange="renderSI()"> WAY BILL <span class="todo-flag">文言未確認</span></label>
-            </div>
-            <div style="margin-top:12px;">
-              <button class="btn-d03 small" onclick="renderSI();showPreview('si')">S/I プレビュー</button>
-            </div>
+          <div class="sub-box">
+            <div class="sub-box-title">POD — S/I · BL 用</div>
+            <div id="siPodGrid"></div>
+          </div>
+          <div class="sub-box">
+            <div class="sub-box-title">運賃表示設定</div>
+            <label class="check-row">
+              <input type="checkbox" id="showFreightTsukanCheck" checked
+                onchange="S.showFreightTsukan=this.checked">
+              FOB 運賃 含む (Freight / Insurance / FOB)
+            </label>
+          </div>
+          <div class="sub-box">
+            <div class="sub-box-title">B/L 発行形態</div>
+            <label class="radio-row"><input type="radio" name="blType" value="original" checked onchange="renderSI()"> Original B/L</label>
+            <label class="radio-row"><input type="radio" name="blType" value="surrender" onchange="renderSI()"> SURRENDER <span class="todo-flag">文言未確認</span></label>
+            <label class="radio-row"><input type="radio" name="blType" value="waybill" onchange="renderSI()"> WAY BILL <span class="todo-flag">文言未確認</span></label>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn-d03" onclick="renderAllDocs()" style="background:var(--accent);color:#fff;border-color:var(--accent);">📄 全体プレビュー</button>
+          </div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn-d03 small secondary" onclick="S.showFreight=S.showFreightTsukan;renderInvoice();showPreview('invoice')">IV</button>
+            <button class="btn-d03 small secondary" onclick="renderPackingList();showPreview('pl')">PL</button>
+            <button class="btn-d03 small secondary" onclick="renderSI();showPreview('si')">S/I</button>
           </div>
         </div>
       </div>
@@ -544,6 +532,10 @@ input,select{font-family:inherit;}
       </div>
     </div>
     <div class="preview-col">
+      <div id="allDocActions" style="display:none;padding:0 0 10px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button onclick="printAllDocs()" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">🖨 全て印刷 (IV+PL+SI)</button>
+        <button onclick="downloadExcel()" style="background:#22863a;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">📊 Excel ダウンロード</button>
+      </div>
       <div id="previewArea"></div>
     </div>
   </div>
@@ -697,7 +689,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.17 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.18 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -4505,6 +4497,171 @@ function switchBigTab(name, el){
   document.querySelectorAll('.big-tab').forEach(t=>t.classList.remove('active'));
   if(el) el.classList.add('active');
 }
+
+/* ══════════════════════════════════════════════
+   통관서류 통합 기능: 全体プレビュー / 全印刷 / Excel
+══════════════════════════════════════════════ */
+function renderAllDocs(){
+  S.showFreight=S.showFreightTsukan;
+  renderInvoice();
+  renderPackingList();
+  renderSI();
+  // 모두 표시
+  ['invoice','pl','si'].forEach(w=>{
+    const el=document.getElementById('doc-'+w);
+    if(el){el.style.display='block';}
+  });
+  document.getElementById('allDocActions').style.display='flex';
+}
+
+function printAllDocs(){
+  const _iv=S.invoiceNo||'';
+  const _origTitle=document.title;
+  document.title=`${_iv}_IV_PL_SI`;
+  const targets=['invoice','pl','si'];
+  const origParents=[]; const origNexts=[];
+  targets.forEach(w=>{
+    const el=document.getElementById('doc-'+w);
+    if(el){
+      origParents.push(el.parentNode); origNexts.push(el.nextSibling);
+      document.body.appendChild(el);
+      el.classList.add('print-target'); el.style.display='block';
+    } else { origParents.push(null); origNexts.push(null); }
+  });
+  const ps=document.createElement('style');ps.id='_ps';
+  ps.textContent='@page{size:A4;margin:0;}';
+  document.head.appendChild(ps);
+  document.body.dataset.print='doc';
+  setTimeout(()=>{
+    window.addEventListener('afterprint',()=>{
+      targets.forEach((w,i)=>{
+        const el=document.getElementById('doc-'+w);
+        if(el&&origParents[i]){
+          if(origNexts[i]) origParents[i].insertBefore(el,origNexts[i]);
+          else origParents[i].appendChild(el);
+          el.classList.remove('print-target'); el.style.display='';
+        }
+      });
+      delete document.body.dataset.print;
+      document.getElementById('_ps')?.remove();
+      document.title=_origTitle;
+    },{once:true});
+    window.print();
+  },200);
+}
+
+function downloadExcel(){
+  if(typeof XLSX==='undefined'||!S.booking){
+    alert('データを先に検索してください。');return;
+  }
+  const bk=S.booking; const si=S.siHeader; const sc=S.saleContract;
+  const iv=S.invoiceNo||'DOCS';
+  const items=aggregateItems(si?.cr49f_s_iid);
+  const t=computeTotals(items);
+  const today=new Date();
+  const todayStr=`${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+
+  // 컨테이너 설명 취득
+  const getDesc=(c)=>{
+    const allDet=Object.values(S.siDetailCache).flat();
+    const d=allDet.find(dd=>dd._crcf9_sale_detail_id_value===c._crcf9_sale_detail_id_value);
+    return d?.crcf9_productname||items[0]?.productName||'—';
+  };
+
+  const wb=XLSX.utils.book_new();
+
+  /* ── Sheet1: Invoice ── */
+  const ivRows=[
+    ['項目','内容'],
+    ['Date',todayStr],
+    ['Invoice No',bk.cr49f_invoice_no||''],
+    ['Contract No',si?.crcf9_po_vo||sc?.cr49f_sale_contract_no||''],
+    ['Payment Term',si?.crcf9_payment_deadline||''],
+    ['Shipped per',bk.cr49f_main_ship_name||''],
+    ['B/L No.',bk.cr49f_bl_number||''],
+    ['On or about',fmtDateEn(getEtd(bk))],
+    ['ETA',fmtDateEn(getEta(bk))],
+    ['From',getPol(bk)],
+    ['To',podLines(si,S.ivPod,false)],
+    ['Trade Term',si?.cr49f_payment_terms||sc?.cr49f_terms_conditions||''],
+    ['L/C No.',si?.cr49f_lc_no||''],
+    ['Shipping Mark',si?.crcf9_shipping_mark||'NO MARK'],
+    [],
+    ['品目','Bales','Weight(MT)','Unit Price(US$/MT)','CIF Amount(US$)'],
+    ...items.map(it=>[it.productName,it.totalBales,+it.totalWeightMt.toFixed(2),it.price,+it.cifAmount.toFixed(2)]),
+    ['TOTAL',t.totalBales,+t.totalWeightMt.toFixed(2),'',+t.cifTotal.toFixed(2)],
+    [],
+    ['FREIGHT',`US$ ${fmtNum(t.freight)}`],
+    ['INSURANCE PREMIUM',`US$ ${t.insurance}`],
+    ['FOB(FREE ON BOARD)',`US$ ${fmtNum(t.fob)}`],
+  ];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ivRows),'Invoice');
+
+  /* ── Sheet2: Packing List ── */
+  const plRows=[
+    ['項目','内容'],
+    ['Date',todayStr],
+    ['Invoice No',bk.cr49f_invoice_no||''],
+    ['Shipping Mark',si?.crcf9_shipping_mark||'NO MARK'],
+    [],
+    ['No.','品目','Partial No.','Container NO.','Seal NO.','Bales','Net Weight(MT)','Gross Weight(MT)','Type'],
+    ...S.containers.map((c,i)=>[
+      i+1,getDesc(c),c.crcf9_partial_no||'',
+      c.crcf9_container_no||'',c.crcf9_seal_no||'',
+      c.crcf9_quantity||0,
+      +((c.crcf9_n_w||0)/1000).toFixed(2),
+      +((c.crcf9_g_w||0)/1000).toFixed(2),
+      c.crcf9_type||'']),
+    ['TOTAL',`${S.containers.length} Containers`,'','','',
+     S.containers.reduce((s,c)=>s+(c.crcf9_quantity||0),0),
+     +((S.containers.reduce((s,c)=>s+(c.crcf9_n_w||0),0))/1000).toFixed(2),
+     +((S.containers.reduce((s,c)=>s+(c.crcf9_g_w||0),0))/1000).toFixed(2),''],
+  ];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(plRows),'Packing List');
+
+  /* ── Sheet3: S/I ── */
+  const blType=document.querySelector('input[name="blType"]:checked')?.value||'original';
+  const blTypeMap={original:'Original B/L',surrender:'SURRENDERED',waybill:'SEA WAYBILL'};
+  const siRows=[
+    ['項目','内容'],
+    ['Booking No.',bk.cr49f_booking_no||''],
+    ['B/L No.',bk.cr49f_bl_number||''],
+    ['Invoice No.',bk.cr49f_invoice_no||''],
+    ['Shipper',si?.crcf9_shipper||'LEENEAR CORPORATION'],
+    ['Shipper Address',si?.crcf9_shipper_address||'VORT SUIDOBASHI 3 5FL, 2-8-11 KANDASARUGAKUCHO, CHIYODA, TOKYO, JAPAN, 101-0064'],
+    ['Shipper TEL',si?.crcf9_shipper_tel||'TEL : +81-3-3528-9850'],
+    ['Shipper FAX',si?.crcf9_shipper_fax||'FAX : +81-3-3528-9851'],
+    ['Consignee',si?.crcf9_consignee||''],
+    ['Notify Party',si?.crcf9_notify_party||''],
+    ['Notify Address',si?.crcf9_address||''],
+    ['TEL',si?.crcf9_tel||''],
+    ['FAX',si?.crcf9_fax||''],
+    ['POL',getPol(bk)],
+    ['Port of Discharge',si?.crcf9_pod_bl1||''],
+    ['Place of Delivery',podLines(si,S.siPod,false)],
+    ['Export Carrier',bk.cr49f_main_ship_name||''],
+    ['ETD',fmtDateEn(getEtd(bk))],
+    ['ETA',fmtDateEn(getEta(bk))],
+    ['Shipping Mark',si?.crcf9_shipping_mark||'NO MARK'],
+    ['Description',items.map(i=>i.productName).join(' / ')],
+    ['L/C No.',si?.cr49f_lc_no||''],
+    ['B/L Type',blTypeMap[blType]||blType],
+    [],
+    ['No.','Container NO.','Seal NO.','品目','Type','Bales','Gross(KG)','Tare(KG)'],
+    ...S.containers.map((c,i)=>[
+      i+1,c.crcf9_container_no||'',c.crcf9_seal_no||'',
+      getDesc(c),c.crcf9_type||'',
+      c.crcf9_quantity||0,c.crcf9_g_w||0,c.crcf9_t_w||0]),
+    ['TOTAL','','','','',
+     S.containers.reduce((s,c)=>s+(c.crcf9_quantity||0),0),
+     S.containers.reduce((s,c)=>s+(c.crcf9_g_w||0),0),
+     S.containers.reduce((s,c)=>s+(c.crcf9_t_w||0),0)],
+  ];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(siRows),'SI');
+
+  XLSX.writeFile(wb,`${iv}_docs.xlsx`);
+}
+
 
 function switchSubTabTsukan(name, el){
   document.getElementById('tsukan-sub-ivpl').style.display = name==='ivpl'?'':'none';
