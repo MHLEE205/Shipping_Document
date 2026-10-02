@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.39</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.41</title>
 <style>
 
 /* ── Base ── */
@@ -358,6 +358,9 @@ input,select{font-family:inherit;}
 .info-box{background:rgba(79,142,247,0.08);border:1px solid rgba(79,142,247,0.2);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--accent2);margin-bottom:10px;}
 .err-box{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--danger);margin-bottom:10px;}
 .warn-box{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--warn);margin-bottom:10px;}
+/* v3.41: コンテナTYPE 非表示業者(INDAH KIAT / TJIWI KIMIA) 赤色警告 — ツール画面のみ */
+.no45-warn{background:rgba(248,81,73,.14);border:2px solid var(--danger);border-radius:6px;padding:10px 14px;font-size:13px;font-weight:700;color:var(--danger);margin-bottom:10px;line-height:1.6;}
+@media print{.no45-warn{display:none!important;}}
 .summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px 20px;font-size:13px;}
 .summary-grid .lbl{color:var(--muted);font-size:11px;margin-bottom:2px;}
 .summary-grid .val{font-weight:700;color:var(--text);}
@@ -436,7 +439,7 @@ input,select{font-family:inherit;}
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
   <div style="font-size:11px;color:#fff;background:var(--accent);padding:2px 10px;border-radius:12px;font-weight:700;letter-spacing:1px;">SYS-D-03</div>
-  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.39</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.41</div>
   <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
   <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
@@ -450,7 +453,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v3.39</span>
+    <span class="hdr-ver" id="header-sub">v3.41</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -529,6 +532,7 @@ input,select{font-family:inherit;}
       </div>
     </div>
     <div class="preview-col">
+      <div id="no45Warn" class="no45-warn no-print" style="display:none"></div>
       <div id="allDocActions" style="display:none;padding:0 0 10px;display:flex;gap:8px;flex-wrap:wrap;">
         <button onclick="printAllDocs()" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">🖨 全て印刷 (IV+PL+SI)</button>
         <button onclick="downloadExcel()" style="background:#22863a;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">📊 Excel ダウンロード</button>
@@ -656,6 +660,7 @@ input,select{font-family:inherit;}
   </div>
   <div class="panel" id="panel-ivpl-fd">
     <div class="ivpl-shared-note">↔ 通関書類タブと同一データを共有。通関書類タブで Invoice No. を検索すると使用できます。</div>
+    <div id="no45WarnFD" class="no45-warn no-print" style="display:none"></div>
     <div id="ivpl-fd-actions" style="display:none">
       <div class="doc-panel" style="max-width:500px;margin-bottom:14px;">
         <div class="doc-panel-title">IV &amp; PL — S/I 選択</div>
@@ -686,7 +691,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.39 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.41 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -1276,11 +1281,47 @@ async function loadInvoice(ivOverride){
   }
 }
 
+/* ══════════════════════════════════════
+   v3.41: PL の コンテナTYPE を記載しない業者 (LC 47A「45' コンテナ不可」)
+   COMPASS の type 値(例: 45GP)が 45フィートと誤読されるため、銀行・輸入者了承のうえ PL は TYPE 未記載とする。
+   判別: ① Invoice No. 先頭 (NIK / NTJ)  ② COMPASS S/I の consignee・notify party・住所に社名
+══════════════════════════════════════ */
+const NO_CT_TYPE_IMPORTERS=[
+  {name:'INDAH KIAT',  prefix:'NIK', re:/INDAH\s*KIAT/i},
+  {name:'TJIWI KIMIA', prefix:'NTJ', re:/TJIWI\s*KIMIA/i},
+];
+function getNoCtTypeImporter(){
+  const iv=String((S.booking&&S.booking.cr49f_invoice_no)||S.invoiceNo||'').toUpperCase();
+  const texts=[S.importerName,S.importerAddr];
+  (S.siList||[]).concat(S.siHeader?[S.siHeader]:[]).forEach(si=>{
+    if(si) texts.push(si.crcf9_consignee,si.crcf9_notify_party,si.crcf9_address);
+  });
+  const blob=texts.filter(Boolean).join(' ');
+  for(const m of NO_CT_TYPE_IMPORTERS){
+    if((iv&&iv.startsWith(m.prefix))||m.re.test(blob)) return m;
+  }
+  return null;
+}
+function updateNo45Warn(){
+  const hit=getNoCtTypeImporter();
+  ['no45Warn','no45WarnFD'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    if(hit){
+      el.innerHTML="⚠ INDAH KIAT / TJIWI KIMIA: LC 47A「45' コンテナ不可」のため、PL の コンテナTYPE は記載しません（銀行・輸入者了承済み）。Excel の PL シートも TYPE 列は空欄です。";
+      el.style.display='block';
+    } else {
+      el.innerHTML=''; el.style.display='none';
+    }
+  });
+}
+
 function hideDataCards(){
   ['dataCard','podCard','ctCard','lcCard','goPanel'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.style.display='none';
   });
+  ['no45Warn','no45WarnFD'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
 }
 
 function renderDataCard(){
@@ -2567,17 +2608,10 @@ function renderESL(){
 function getAspexGoodsDesc(){
   // v1.09: COMPASS siDetailList × container join → 실제 선적 품목만
   // v3.39: 品名は共通関数 getProductNames() (COMPASS S/I) を使用
+  // v3.40: LC 45A キーワードによる推測表記を廃止 — COMPASS に品名が無い場合は他書類と同じ警告表示
   const _pn=getProductNames();
   if(_pn.length>0) return _pn;
-  // LC JSON 키워드 fallback
-  const text=(S.lcJson?.commodity45A||S.siDetail?.crcf9_productname||'').toUpperCase();
-  const rows=[];
-  if(text.includes('ONP')) rows.push('WASTE PAPER FOR NEWSPRINT MANUFACTURING (ONP)');
-  if(text.includes('OMG')) rows.push('WASTE PAPER FOR NEWSPRINT MANUFACTURING (OMG)');
-  if(text.includes('SOP')||text.includes('SHREDDED')) rows.push('WASTE PAPER FOR PACKAGING MANUFACTURING (SOP)');
-  if(text.includes('BBC')) rows.push('WASTE PAPER FOR PACKAGING MANUFACTURING (BBC)');
-  if(rows.length===0) rows.push(S.siDetail?.crcf9_productname||'WASTE PAPER');
-  return rows;
+  return [getProductText('<br>')];
 }
 
 function fmtDateSlash(iso){
@@ -4138,6 +4172,7 @@ function computeTotals(items){
 
 // ── Invoice ──────────────────────────────────────────
 function renderInvoice(){
+  updateNo45Warn(); // v3.41
   const si = currentSi(S.ivSino);
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
@@ -4207,6 +4242,8 @@ function renderInvoice(){
 
 // ── Packing List (다중 페이지 지원) ───────────────────
 function renderPackingList(){
+  updateNo45Warn(); // v3.41
+  const _hideCtType = !!getNoCtTypeImporter(); // v3.41: TYPE 非記載業者
   const si = currentSi(S.ivSino);
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
@@ -4237,7 +4274,7 @@ function renderPackingList(){
     body += T(424.5, 297.5, 7.2, 'Bales');
     body += T(452.9, 294.1, 7.2, 'Net Weight '); body += T(464.9, 300.8, 7.2, '(MT)');
     body += T(505.0, 294.1, 7.2, 'Gross Weight'); body += T(519.8, 300.8, 7.2, '(MT)');
-    body += T(564.1, 297.5, 7.2, 'Type');
+    if (!_hideCtType) body += T(564.1, 297.5, 7.2, 'Type');
     if (chunks.length > 1){
       body += T(500, 261.3, 8.6, `(Page ${pageIdx+1}/${chunks.length})`, {align:'right', w:80});
     }
@@ -4257,7 +4294,7 @@ function renderPackingList(){
       body += T(429.1, y, 7.2, row.c.crcf9_quantity||0, {align:'right', w:15.6});
       body += T(463.3, y, 7.2, fmtNum(nw), {align:'right', w:30});
       body += T(518.2, y, 7.2, fmtNum(gw), {align:'right', w:30});
-      body += T(562.5, y, 7.2, row.c.crcf9_type||'');
+      if (!_hideCtType) body += T(562.5, y, 7.2, row.c.crcf9_type||'');
     });
 
     if (isLast){
@@ -4692,14 +4729,14 @@ function downloadExcel(){
     ['Invoice No',bk.cr49f_invoice_no||''],
     ['Shipping Mark',si?.crcf9_shipping_mark||'NO MARK'],
     [],
-    ['No.','品目','Partial No.','Container NO.','Seal NO.','Bales','Net Weight(MT)','Gross Weight(MT)','Type'],
+    ['No.','品目','Partial No.','Container NO.','Seal NO.','Bales','Net Weight(MT)','Gross Weight(MT)',getNoCtTypeImporter()?'':'Type'],
     ...S.containers.map((c,i)=>[
       i+1,getDesc(c),c.crcf9_partial_no||'',
       c.crcf9_container_no||'',c.crcf9_seal_no||'',
       c.crcf9_quantity||0,
       +((c.crcf9_n_w||0)/1000).toFixed(2),
       +((c.crcf9_g_w||0)/1000).toFixed(2),
-      c.crcf9_type||'']),
+      getNoCtTypeImporter()?'':(c.crcf9_type||'')]),
     ['TOTAL',`${S.containers.length} Containers`,'','','',
      S.containers.reduce((s,c)=>s+(c.crcf9_quantity||0),0),
      +((S.containers.reduce((s,c)=>s+(c.crcf9_n_w||0),0))/1000).toFixed(2),
@@ -4816,6 +4853,7 @@ async function syncFinalDocumentState(){
     S.voNo =S.siList.find(x=>x.crcf9_vo_no)?.crcf9_vo_no||'';
   }
   S.importer=detectImporter(S.invoiceNo);
+  updateNo45Warn(); // v3.41
   renderIvSinoGrid2();
   // siCard 표시
   const siCard=document.getElementById('siCard');
