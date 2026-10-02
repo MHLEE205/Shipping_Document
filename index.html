@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.38</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.39</title>
 <style>
 
 /* ── Base ── */
@@ -436,7 +436,7 @@ input,select{font-family:inherit;}
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
   <div style="font-size:11px;color:#fff;background:var(--accent);padding:2px 10px;border-radius:12px;font-weight:700;letter-spacing:1px;">SYS-D-03</div>
-  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.38</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.39</div>
   <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
   <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
@@ -450,7 +450,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v3.38</span>
+    <span class="hdr-ver" id="header-sub">v3.39</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -686,7 +686,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.38 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.39 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -1307,7 +1307,7 @@ function renderDataCard(){
     ['Carrier',S.carrierName,''],
     ['Contract No.',S.poVo||sc?.cr49f_sale_contract_no||'—',''],
     ['LC No.',lcNo||'—','lc'],
-    ['Product',sd?.crcf9_productname||'—',''],
+    ['Product',getProductNames().join(' / ')||'—',''],
     ['Price (USD/MT)',(S.saleDetail?.cr49f_price||0).toFixed(2),''],
     ['Total N/W',S.totalNwMt.toFixed(2)+' MT',''],
     ['Total Bales',S.totalBales+' BALES',''],
@@ -1407,7 +1407,7 @@ async function autoLoadLcJson(){
     const po=parsePO(lc.commodity45A||'');
     S.poNo=po.no;
     S.poDate=po.date;
-    S.goodsType=detectGoodsType(lc.commodity45A||'',S.siDetail?.crcf9_productname||'');
+    S.goodsType=detectGoodsType(lc.commodity45A||'',getProductNames().join(' '));
     S.docs46A=lc.docs46A||[];
     S.addCond47A=lc.addCond47A||'';
     showLcJsonInfo(lc);
@@ -1441,7 +1441,7 @@ async function openLcJson(){
     const po=parsePO(lc.commodity45A||'');
     S.poNo=po.no;
     S.poDate=po.date;
-    S.goodsType=detectGoodsType(lc.commodity45A||'',S.siDetail?.crcf9_productname||'');
+    S.goodsType=detectGoodsType(lc.commodity45A||'',getProductNames().join(' '));
     S.docs46A=lc.docs46A||[];
     S.addCond47A=lc.addCond47A||'';
     showLcJsonInfo(lc);
@@ -1787,7 +1787,8 @@ function buildAll(){
   }
 
   if(S.lcJson) runLcVerify();
-  alert('全書類を生成しました！各タブで確認・印刷できます。');
+  const _pnMissing=getProductNames().length===0;
+  alert('全書類を生成しました！各タブで確認・印刷できます。'+(_pnMissing?'\n\n⚠ COMPASS S/I に品名が見つかりません。書類の品名欄に警告を表示しています。COMPASS の S/I 品名を確認してください。':''));
 }
 
 /* N/A パネル表示ヘルパー */
@@ -1926,7 +1927,7 @@ function certSig(){
 function getCommonItems(){
   const bk=S.booking;
   const lc=getLcNo();
-  const product=S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
+  const product=getProductText('<br>');
   const pol=bk.crcf9_bl_pol_text||'—';
   const pod=getPod();
   return [
@@ -2015,7 +2016,7 @@ function renderBeneCert(){
   const blDate=fmtDateEn(getEtd(bk));
   const vessel=bk.cr49f_main_ship_name||'—';
   const lc=getLcNo();
-  const product=S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
+  const product=getProductText('<br>');
   const carrier=S.carrierName||'—';
   const sc=S.saleContract;
   const poLine=getPoLine();
@@ -2143,7 +2144,7 @@ function renderFreeTime(){
   const invoiceNo=bk.cr49f_invoice_no;
   const issuanceDate=fmtDateEn(getEtd(bk));
   const lc=getLcNo();
-  const product=S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
+  const product=getProductText('<br>');
   const poLine=getPoLine();
 
   document.getElementById('doc-ft').innerHTML=`
@@ -2565,19 +2566,9 @@ function renderESL(){
 
 function getAspexGoodsDesc(){
   // v1.09: COMPASS siDetailList × container join → 실제 선적 품목만
-  if(S.siDetailList && S.siDetailList.length>0){
-    const shippedIds=new Set(
-      S.containers.map(c=>c['_crcf9_sale_detail_id_value']).filter(Boolean)
-    );
-    if(shippedIds.size>0){
-      const shipped=S.siDetailList.filter(d=>shippedIds.has(d['_crcf9_sale_detail_id_value']));
-      const names=shipped.map(d=>d.crcf9_productname).filter(Boolean);
-      if(names.length>0) return names;
-    }
-    // 조인 불가 시 전건 반환
-    const allNames=S.siDetailList.map(d=>d.crcf9_productname).filter(Boolean);
-    if(allNames.length>0) return allNames;
-  }
+  // v3.39: 品名は共通関数 getProductNames() (COMPASS S/I) を使用
+  const _pn=getProductNames();
+  if(_pn.length>0) return _pn;
   // LC JSON 키워드 fallback
   const text=(S.lcJson?.commodity45A||S.siDetail?.crcf9_productname||'').toUpperCase();
   const rows=[];
@@ -2646,6 +2637,63 @@ function getShippedDetails(){
 }
 
 /* ══════════════════════════════════════
+   v3.39: 品名 単一取得経路 (全書類共通)
+   LC → TOOL → COMPASS S/I → D-03 の流れに従い、品名の源泉は COMPASS S/I のみ。
+   IV/PL aggregateItems と同一ロジック:
+     ① 選択S/Iの detail (船積済み品目のみ) の品名
+     ② 空なら、他S/Iの同一 sale_detail の品名で補完 (nameMap)
+   → どの書類でも同じ品名が出る。基本文言(WASTE PAPER RECYCLING 等)での黙示的代替は行わない。
+══════════════════════════════════════ */
+function buildProductNameMap(){
+  const nameMap={};
+  for(const cache of Object.values(S.siDetailCache||{})){
+    for(const d of (cache||[])){
+      const sdId=d['_crcf9_sale_detail_id_value']||d.crcf9_sale_detail_id;
+      if(sdId&&d.crcf9_productname&&!nameMap[sdId]) nameMap[sdId]=d.crcf9_productname;
+    }
+  }
+  return nameMap;
+}
+
+function getProductNames(siId){
+  const nameMap=buildProductNameMap();
+  const sid=siId||S.siHeader?.cr49f_s_iid;
+  const own=(sid&&S.siDetailCache&&S.siDetailCache[sid])||[];
+  // 船積済み sale_detail (bales>0) — aggregateItems と同一の判定
+  const bales={};
+  (S.containers||[]).forEach(c=>{
+    const k=c['_crcf9_sale_detail_id_value']||c.crcf9_sale_detail_id;
+    if(!k) return;
+    bales[k]=(bales[k]||0)+(c.crcf9_quantity||0);
+  });
+  const shippedIds=new Set(Object.keys(bales).filter(k=>bales[k]>0));
+  const names=[];
+  const add=n=>{ if(n&&!names.includes(n)) names.push(n); };
+  // ① 選択S/Iの detail (船積済み品目のみ。船積情報がなければ全件)
+  for(const d of own){
+    const sdId=d['_crcf9_sale_detail_id_value']||d.crcf9_sale_detail_id;
+    if(shippedIds.size>0&&!(sdId&&shippedIds.has(sdId))) continue;
+    add(d.crcf9_productname||nameMap[sdId]);
+  }
+  if(names.length) return names;
+  // ② 選択S/Iに該当detailがない場合: 船積済み sale_detail を全S/Iの品名で補完
+  shippedIds.forEach(id=>add(nameMap[id]));
+  if(names.length) return names;
+  // ③ 船積情報なし: 全S/Iの品名
+  Object.values(nameMap).forEach(add);
+  return names;
+}
+
+/* 品名 表示用文字列。COMPASS 全S/Iに品名が無い場合のみ警告表示 (plain=true はメール件名等のテキスト用) */
+function getProductText(sep,plain){
+  const names=getProductNames();
+  if(names.length) return names.join(sep===undefined?', ':sep);
+  return plain
+    ? '【品名未取得】'
+    : '<span class="prod-missing" style="color:#c00;font-weight:700;">⚠ 品名未取得 (COMPASS S/I の品名を確認)</span>';
+}
+
+/* ══════════════════════════════════════
    v1.32: Beneficiary's Certificate (MEGA SURYA)
 ══════════════════════════════════════ */
 function renderBeneCertMegaSurya(){
@@ -2656,7 +2704,7 @@ function renderBeneCertMegaSurya(){
 
   // 실제 선적 품목만 (컨테이너 sale_detail_id 조인)
   const detailList=getShippedDetails();
-  const uniqueProducts=[...new Set(detailList.map(d=>d.crcf9_productname).filter(Boolean))];
+  const uniqueProducts=getProductNames();
   const uniqueHsCodes=[...new Set(detailList.map(d=>parseHsCode(d.crcf9_hs_code)).filter(Boolean))];
   const uniquePoNos=[...new Set(detailList.map(d=>d._si_po_vo).filter(Boolean))];
 
@@ -2670,7 +2718,7 @@ function renderBeneCertMegaSurya(){
     : `<div class="cert-item">
         <span class="cert-bullet">●</span>
         <span class="cert-item-label">DESCRIPTION OF GOODS</span>
-        <span class="cert-item-val">${S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING'}</span>
+        <span class="cert-item-val">${getProductText('<br>')}</span>
       </div>`;
 
   const poLines=uniquePoNos.map(p=>`
@@ -2753,13 +2801,13 @@ function renderCOOMegaSurya(){
 
   // 실제 선적 품목만 (컨테이너 sale_detail_id 조인)
   const detailList=getShippedDetails();
-  const uniqueProducts=[...new Set(detailList.map(d=>d.crcf9_productname).filter(Boolean))];
+  const uniqueProducts=getProductNames();
   const uniqueHsCodes=[...new Set(detailList.map(d=>parseHsCode(d.crcf9_hs_code)).filter(Boolean))];
   const uniquePoNos=[...new Set(detailList.map(d=>d._si_po_vo).filter(Boolean))];
 
   const productLines=uniqueProducts.length>0
     ? uniqueProducts.join('<br>')
-    : (S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING');
+    : getProductText('<br>');
 
   const poLines=uniquePoNos.map(p=>`GOODS SHIPPED AS PER PURCHASE ORDER ${p}`).join('<br>');
   const hsLines=uniqueHsCodes.map(h=>`HS CODE : ${h}`).join('<br>');
@@ -2943,9 +2991,7 @@ function renderQQGeneric(){
   const portOfDest=getPortOfDestination();
 
   const detailList=getShippedDetails();
-  const productLines=detailList.length>0
-    ? [...new Set(detailList.map(d=>d.crcf9_productname).filter(Boolean))].join('<br>')
-    : (S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING');
+  const productLines=getProductText('<br>');
 
   const allBlock=certBottom();
 
@@ -3011,7 +3057,7 @@ function renderBeneCertDT(){
   const vessel=bk.cr49f_main_ship_name||'—';
   const carrier=S.carrierName||'—';
   const lc=getLcNo();
-  const product=[...new Set((getShippedDetails()).map(d=>d.crcf9_productname).filter(Boolean))].join(', ')||S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
+  const product=getProductText(', ');
   const amtStr='USD '+S.amountUsd.toLocaleString('en-US',{minimumFractionDigits:2});
   const sc=S.saleContract;
   const contractNo=S.poVo||sc?.cr49f_sale_contract_no||'—';
@@ -3099,7 +3145,7 @@ function renderBeneCertMailNXM(){
   const polJapan=pol.toUpperCase().includes('JAPAN')?pol:pol+', JAPAN';
   const pod=getPortOfDestination()||'—';
   const lc=getLcNo();
-  const product=[...new Set((getShippedDetails()).map(d=>d.crcf9_productname).filter(Boolean))].join('<br>')||S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
+  const product=getProductText('<br>');
   const ctCount=S.containers.length;
   const ctType=[...new Set(S.containers.map(c=>c.crcf9_type).filter(Boolean))].join('/')||'40\'';
   const ctSummary=ctCount>0?`${ctCount} Con (${ctType})`:'—';
@@ -3204,7 +3250,7 @@ function renderBeneCertSimple(){
   const blDateTime=makeEmailSentTime(bk);
   const blNo=bk.cr49f_bl_number||'';
   const lc=getLcNo();
-  const product=[...new Set((getShippedDetails()).map(d=>d.crcf9_productname).filter(Boolean))].join('<br>')||S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
+  const product=getProductText('<br>');
 
   const declare=S.beneCertText||
     'WE, LEENEAR CORPORATION HEREBY DECLARE THAT: LEAST 10 DAYS FREE TIME OF DEMURRAGE AND 04 DAYS OF DETENTION AT DESTINATION PORT.';
@@ -3264,8 +3310,7 @@ function renderBeneCertXSD(){
 
   // 품목 (선적 품목 조인 우선)
   const detailList=getShippedDetails();
-  const product=[...new Set(detailList.map(d=>d.crcf9_productname).filter(Boolean))].join(', ')
-    ||S.siDetail?.crcf9_productname||'WASTE PAPER';
+  const product=getProductText(', ');
 
   // IMPORTER 정보 (COMPASS crcf9_notify_party / crcf9_address / crcf9_tel)
   const importerName=S.importerName||'XSD INTERNATIONAL PAPER SDN BHD';
@@ -3454,9 +3499,8 @@ function renderCopyOfMail(){
   const vessel=bk.cr49f_main_ship_name||'—';
   const carrier=S.carrierName||'—';
   const lc=getLcNo();
-  const productLines=[...new Set((getShippedDetails()).map(d=>d.crcf9_productname).filter(Boolean))];
-  const product=productLines.join('<br>')||S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
-  const productPlain=productLines.join(', ')||S.siDetail?.crcf9_productname||'WASTE PAPER RECYCLING';
+  const product=getProductText('<br>');
+  const productPlain=getProductText(', ',true);
   const pol=bk.crcf9_bl_pol_text||'—';
   const polJapan=pol.toUpperCase().includes('JAPAN')?pol:pol+', JAPAN';
   const portOfDest=getPortOfDestination();
@@ -4037,13 +4081,7 @@ function aggregateItems(siId){
   });
 
   // S/I①のproductNameが空でもS/I②から補完するためのマップ
-  const nameMap={};
-  for(const cache of Object.values(S.siDetailCache)){
-    for(const d of (cache||[])){
-      const sdId=d['_crcf9_sale_detail_id_value']||d.crcf9_sale_detail_id;
-      if(sdId&&d.crcf9_productname&&!nameMap[sdId]) nameMap[sdId]=d.crcf9_productname;
-    }
-  }
+  const nameMap=buildProductNameMap(); // v3.39: 全書類共通の品名マップ
 
   const processDetail=(d)=>{
     const sdId=d['_crcf9_sale_detail_id_value']||d.crcf9_sale_detail_id;
