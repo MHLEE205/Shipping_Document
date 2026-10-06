@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.41</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.42</title>
 <style>
 
 /* ── Base ── */
@@ -439,7 +439,7 @@ input,select{font-family:inherit;}
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
   <div style="font-size:11px;color:#fff;background:var(--accent);padding:2px 10px;border-radius:12px;font-weight:700;letter-spacing:1px;">SYS-D-03</div>
-  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.41</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.42</div>
   <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
   <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
@@ -453,7 +453,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v3.41</span>
+    <span class="hdr-ver" id="header-sub">v3.42</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -691,7 +691,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.41 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.42 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -1002,10 +1002,10 @@ function updateTabHighlights(){
         const el=document.getElementById('tab-'+id);
         if(el) el.classList.add('needed');
       });
-      ['bene','ft','mail'].forEach(id=>{
-        const el=document.getElementById('tab-'+id);
-        if(el) el.classList.add('na');
-      });
+      const _lcr=getLcCertRequirements(); // v3.42: LC 46A の要件で判定
+      document.getElementById('tab-bene')?.classList.add(_lcr.bene.length>0?'needed':'na');
+      document.getElementById('tab-ft')?.classList.add(_lcr.freeTime?'needed':'na');
+      document.getElementById('tab-mail')?.classList.add('na');
       const eslEl=document.getElementById('tab-esl');
       if(eslEl) eslEl.classList.add(isIndonesiaDest()?'needed':'na');
     } else {
@@ -1808,10 +1808,7 @@ function buildAll(){
       hideTab('esl');
       updateBadge('b-esl','—');
     }
-    document.getElementById('doc-bene').innerHTML='<div class="na-panel">N/A — 未登録業者 — Beneficiary Certificate 不要</div>';
-    renderNAForPanel('ft-content','未登録業者 — Free Time Certificate 不要');
-    updateBadge('b-bene','N/A');
-    updateBadge('b-ft','N/A');
+    renderLcDrivenCerts(); // v3.42: LC 46A の要件に従い Beneficiary's Certificate / Free Time 証明書を生成 (未登録業者)
     hideTab('mail');
     updateBadge('b-mail','—');
   } else {
@@ -1829,7 +1826,7 @@ function buildAll(){
 
   if(S.lcJson) runLcVerify();
   const _pnMissing=getProductNames().length===0;
-  alert('全書類を生成しました！各タブで確認・印刷できます。'+(_pnMissing?'\n\n⚠ COMPASS S/I に品名が見つかりません。書類の品名欄に警告を表示しています。COMPASS の S/I 品名を確認してください。':''));
+  alert('全書類を生成しました！各タブで確認・印刷できます。'+_lcWarnText()+(_pnMissing?'\n\n⚠ COMPASS S/I に品名が見つかりません。書類の品名欄に警告を表示しています。COMPASS の S/I 品名を確認してください。':''));
 }
 
 /* N/A パネル表示ヘルパー */
@@ -2458,14 +2455,166 @@ function certBottom(){
   return `<div class="cert-bottom" style="margin-top:6px;">${S.allText}</div>`;
 }
 
+/* ══════════════════════════════════════
+   v3.42: LC 46A 駆動の Beneficiary's Certificate (業者条件なし)
+   - LC JSON の docs46A から「Beneficiary's Certificate」「Free Time 証明書」の要件を自動認識
+   - 文言: Free Time は COMPASS S/I (crcf9_bencert_text) 優先 → 無ければ LC。Beneficiary's Certificate は LC。
+   - 参照行 (SALES CONTRACT / PURCHASE ORDER): COMPASS S/I の crcf9_all から抽出
+   - 未登録(GENERIC)業者は「不要 N/A」ではなく LC 要件に従って生成。登録済み業者の書式は変更しない。
+══════════════════════════════════════ */
+function lcDocBody(raw){   // "7. <本文> — 03 ORIGINALS" → 本文
+  return String(raw||'').replace(/^\s*\d+\s*[.)]\s*/,'').replace(/\s*[—–-]\s*\d+\s*ORIGINALS?\s*$/i,'').trim();
+}
+function lcDocDeclaration(raw){   // 「…CERTIFYING THAT」以降の宣言文 (句点は1つに正規化)
+  const t=lcDocBody(raw);
+  const m=t.match(/(?:CERTIFYING|CERTIFY|STATING|CONFIRMING|DECLARING|EVIDENCING)\s+THAT\s+(.+?)(?:\.?\s*THIS CERTIFICATE IS NOT REQUIRED.*)?$/is);
+  return m?m[1].trim().replace(/\.+$/,'').toUpperCase()+'.':'';
+}
+function lcDocKind(raw){   // 'FREE_TIME' | 'FREE_TIME_CARRIER'(船会社のみ発行) | 'BENE' | null
+  const t=lcDocBody(raw).toUpperCase();
+  if(!/CERTIF/.test(t)) return null;
+  if(/(DEMURRAGE|DETENTION|FREE TIME)/.test(t)) return /BENEFICIARY/.test(t)?'FREE_TIME':'FREE_TIME_CARRIER';
+  if(/^BENEFICIARY'?S\s+CERTIFICATE/.test(t)) return 'BENE';
+  return null;
+}
+function getLcCertRequirements(){
+  const docs=(S.lcJson&&Array.isArray(S.lcJson.docs46A))?S.lcJson.docs46A:null;
+  const out={loaded:!!docs,freeTime:null,bene:[],carrierOnly:false};
+  if(!docs) return out;
+  docs.forEach(d=>{
+    const k=lcDocKind(d);
+    if(k==='FREE_TIME'){ if(!out.freeTime) out.freeTime={text:lcDocDeclaration(d),raw:lcDocBody(d)}; }
+    else if(k==='BENE') out.bene.push({text:lcDocDeclaration(d),raw:lcDocBody(d)});
+    else if(k==='FREE_TIME_CARRIER') out.carrierOnly=true;
+  });
+  return out;
+}
+/* COMPASS S/I の Free Time 文言 (全S/I から。選択S/I優先) — 改行を保持 */
+function getCompassFreeTimeText(){
+  const re=/(DEMURRAGE|DETENTION|FREE TIME)/i;
+  const list=[S.siHeader].concat(S.siList||[]).filter(Boolean);
+  const hit=list.find(si=>si.crcf9_bencert_text&&re.test(si.crcf9_bencert_text));
+  return hit?String(hit.crcf9_bencert_text).trim():'';
+}
+/* COMPASS S/I の crcf9_all から「SALES CONTRACT NO.… DATED …」「PURCHASE ORDER NO.… DATE …」を抽出 */
+function getContractRefLine(){
+  for(const line of String(S.allText||'').split(/\r?\n/)){
+    const m=line.match(/((?:SALES\s+CONTRACT|PURCHASE\s+ORDER|CONTRACT)\s*NO\.?\s*:?\s*\S+(?:.*?\bDATED?\b\s+[^\n]*?)?)\.?\s*$/i);
+    if(m) return m[1].trim().toUpperCase();
+  }
+  return '';
+}
+function _escH(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function lcCertDocHtml(declHtml){
+  const bk=S.booking;
+  const lc=getLcNo();
+  const ref=getContractRefLine();
+  const refHtml=ref?_escH(ref):'<span style="color:#c00;font-weight:700;">⚠ 参照行 (SALES CONTRACT / PURCHASE ORDER) 未取得 — COMPASS S/I を確認</span>';
+  let importerBlock=`${S.importerName||'—'}<br>${S.importerAddr||''}`;
+  if(S.importerTel||S.importerFax){
+    importerBlock+=`<br>${S.importerTel||''}${S.importerFax?'&nbsp;&nbsp;&nbsp;'+S.importerFax:''}`;
+  }
+  return `
+    ${aspexDocHeader()}
+    <div class="cert-title">Beneficiary's Certificate</div>
+    <div class="cert-meta">
+      <div>Date: &nbsp;&nbsp;&nbsp;${fmtDateEn(getEtd(bk))}</div>
+      <div>InvoiceNo.: &nbsp;${bk.cr49f_invoice_no}</div>
+    </div>
+    <div class="cert-to-block"><strong>TO.&nbsp;&nbsp;&nbsp;${S.importerName||'—'}</strong></div>
+    <div class="cert-party-block">
+      <div class="cert-exporter-label">EXPORTER</div>
+      LEENEAR CORPORATION<br>
+      VORT SUIDOBASHI 3 5FL, 2-8-11 KANDASARUGAKUCHO, CHIYODA, TOKYO, JAPAN<br>
+      TEL:+81-3-3528-9850 &nbsp;&nbsp;&nbsp; FAX:+81-3-3528-9851
+    </div>
+    <div class="cert-party-block">
+      <div class="cert-exporter-label">IMPORTER</div>
+      ${importerBlock}
+    </div>
+    <div class="ft-declare">
+      WE, LEENEAR CORPORATION HEREBY DECLARE THAT:<br>
+      ${declHtml}
+    </div>
+    <br>
+    <div class="cert-bottom">L/C NO.: ${lc}</div>
+    <div class="cert-bottom">${refHtml}</div>
+    <div class="cert-spacer"></div>
+    ${certSig()}`;
+}
+
+/* 未登録(GENERIC)業者: LC 46A の要件に従い Beneficiary's Certificate / Free Time 証明書を生成 */
+function renderLcDrivenCerts(){
+  S._lcCertWarn=[];
+  const r=getLcCertRequirements();
+  const beneEl=document.getElementById('doc-bene');
+  const redPanel=(msg)=>`<div class="na-panel" style="color:#c00;font-weight:700;">⚠ ${_escH(msg)}</div>`;
+  const ensureFtPanel=()=>{
+    const ftc=document.getElementById('ft-content');
+    if(ftc&&!ftc.querySelector('#doc-ft')){
+      ftc.innerHTML=`
+        <div class="doc-section-title">Free Time Certificate (Beneficiary's Certificate)</div>
+        <div class="cert-wrap"><div class="cert-doc" id="doc-ft"></div></div>`;
+    }
+  };
+  const noLc='LC JSON 未読込 — LC 46A の要件を判定できません (LC JSON を読込んでから再生成してください)';
+
+  // ── Beneficiary's Certificate (LC 46A: BENEFICIARY'S CERTIFICATE …)
+  if(!r.loaded){
+    beneEl.innerHTML=`<div class="na-panel">N/A — ${noLc}</div>`;
+    updateBadge('b-bene','N/A');
+  } else if(r.bene.length===0){
+    beneEl.innerHTML='<div class="na-panel">N/A — LC 46A に Beneficiary\'s Certificate の要件なし</div>';
+    updateBadge('b-bene','N/A');
+  } else if(!r.bene[0].text){
+    beneEl.innerHTML=redPanel('LC 46A の Beneficiary\'s Certificate 文言を抽出できません: '+r.bene[0].raw);
+    updateBadge('b-bene','⚠');
+    S._lcCertWarn.push('Beneficiary\'s Certificate の文言を LC 46A から抽出できません。');
+  } else {
+    beneEl.innerHTML=lcCertDocHtml(_escH(r.bene[0].text));
+    updateBadge('b-bene','✓');
+    if(r.bene.length>1) S._lcCertWarn.push(`LC 46A に Beneficiary's Certificate の要件が ${r.bene.length} 件あります。先頭の1件のみ生成しました。`);
+  }
+
+  // ── Free Time 証明書 (LC 46A: CERTIFICATE … FREE DEMURRAGE / DETENTION …)
+  if(!r.loaded){
+    renderNAForPanel('ft-content',noLc);
+    updateBadge('b-ft','N/A');
+  } else if(!r.freeTime){
+    renderNAForPanel('ft-content',r.carrierOnly?'LC 46A の Free Time 証明書は船会社発行のみ — 生成不要':'LC 46A に Free Time Certificate の要件なし');
+    updateBadge('b-ft','N/A');
+  } else {
+    const compassText=getCompassFreeTimeText();           // COMPASS S/I 優先 (改行保持)
+    const ftText=compassText||r.freeTime.text;            // 無ければ LC
+    ensureFtPanel();
+    if(!ftText){
+      document.getElementById('doc-ft').innerHTML=redPanel('LC 46A の Free Time 文言を抽出できません: '+r.freeTime.raw);
+      updateBadge('b-ft','⚠');
+      S._lcCertWarn.push('Free Time 証明書の文言を LC 46A / COMPASS から取得できません。');
+    } else {
+      document.getElementById('doc-ft').innerHTML=lcCertDocHtml(_escH(ftText).replace(/\r?\n/g,'<br>'));
+      updateBadge('b-ft','✓');
+    }
+  }
+  if((r.bene.length>0&&r.bene[0].text)||(r.freeTime)){
+    if(!getContractRefLine()) S._lcCertWarn.push('参照行 (SALES CONTRACT / PURCHASE ORDER) を COMPASS S/I の crcf9_all から取得できません。書類に警告を表示しています。');
+  }
+}
+function _lcWarnText(){
+  return (S.importer==='GENERIC'&&S._lcCertWarn&&S._lcCertWarn.length)?('\n\n⚠ '+S._lcCertWarn.join('\n⚠ ')):'';
+}
+
 function getFreeTimeDeclare(){
+  // v3.42: 共通パーサー使用 (番号・"— 03 ORIGINALS" 除去、句点の重複防止)。対象文書の選び方は従来どおり。
   if(S.lcJson?.docs46A){
-    const ftDoc=S.lcJson.docs46A.find(d=>
-      d.toUpperCase().includes('DEMURRAGE')||d.toUpperCase().includes('FREE TIME DETENTION')
-    );
+    const ftDoc=S.lcJson.docs46A.find(d=>{
+      const u=String(d).toUpperCase();
+      return u.includes('DEMURRAGE')||u.includes('FREE TIME DETENTION');
+    });
     if(ftDoc){
-      const m=ftDoc.match(/CERTIFYING THAT\s+(.+?)(?:\.\s*THIS CERTIFICATE IS NOT REQUIRED|$)/is);
-      if(m) return m[1].trim().toUpperCase()+'.';
+      const t=lcDocDeclaration(ftDoc);
+      if(t) return t;
     }
   }
   return '10 DAYS FREE TIME DEMURRAGE AND 4 DAYS FREE TIME DETENTION OR 14 DAYS FREE TIME COMBINED FOR DEMURRAGE AND DETENTION AT DESTINATION.';
