@@ -1,24 +1,75 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja" data-theme="leenai">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link id="leenaiFavicon" rel="icon">
-<link rel="stylesheet" href="https://mhlee205.github.io/LEENAI_COMMON/v1/leenai-common.css">
-<script src="https://mhlee205.github.io/LEENAI_COMMON/v1/leenai-common.js"></script>
-<script>if(!window.LEENAI){document.addEventListener('DOMContentLoaded',function(){document.body.innerHTML='<div style="padding:40px;font-family:sans-serif">共通ファイルの読み込みに失敗しました。ページを再読み込みしてください。</div>';});}</script>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.45</title>
 <style>
 
-/* ── D-03 固有変数 ── */
-:root{
-  --border2:#3d4466; --muted:#8892a4; --muted2:#4a5568;
+/* ── Base ── */
+:root {
+  --bg:#0f1117; --surface:#1a1d27; --surface2:#22263a; --surface3:#2a2f46;
+  --border:#2e3350; --border2:#3d4466;
+  --text:#e2e8f0; --text2:#8892a4; --text3:#4a5568;
+  --muted:#8892a4; --muted2:#4a5568;
+  --accent:#4f8ef7; --accent2:#3fb950;
+  --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
   --purple:#a371f7; --info:#38bdf8; --radius:10px;
 }
+[data-theme="light"] {
+  --bg:#FAF9F8; --surface:#FFFFFF; --surface2:#F3F2F1; --surface3:#EDEBE9;
+  --border:#E1DFDD; --text:#201F1E; --text2:#605E5C; --text3:#A19F9D;
+  --muted:#605E5C; --muted2:#A19F9D;
+  --accent:#0F6CBD;
+}
+[data-theme="leenai"] {
+  --bg:#E9EEE8; --surface:#F4F5F7; --surface2:#E1E8E0; --surface3:#D5DFD3;
+  --border:#B9C7B7; --text:#1F2A22; --text2:#4F5E52; --text3:#6D7B71;
+  --muted:#4F5E52; --muted2:#6D7B71;
+  --accent:#2F6B45; --accent2:#3F6FA8;
+}
+[data-theme="focus"] {
+  --bg:#E7EAF0; --surface:#F4F5F7; --surface2:#DDE2EA; --surface3:#CFD6E2;
+  --border:#AEB8C8; --text:#202733; --text2:#515C6C; --text3:#697587;
+  --muted:#515C6C; --muted2:#697587;
+  --accent:#315F9E; --accent2:#2F7D6A;
+}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{min-height:100vh;font-size:13px;}
+body{font-family:'Segoe UI','Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;}
 button{cursor:pointer;font-family:inherit;}
 input,select{font-family:inherit;}
 
+/* ── Header ── */
+.hdr{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 20px;display:flex;align-items:center;gap:14px;
+  position:sticky;top:0;z-index:200;height:50px;
+}
+.logo{font-size:17px;font-weight:800;letter-spacing:1px;}
+.logo span{color:var(--accent);}
+.hdr-sys{font-size:10px;color:var(--text2);background:var(--surface2);
+  border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-weight:600;}
+.hdr-title{font-size:12px;font-weight:600;color:var(--text2);}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.hdr-ver{font-size:11px;color:#fff;background:var(--accent);padding:2px 9px;border-radius:12px;font-weight:700;}
+.theme-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;}
+.theme-btn:hover{border-color:var(--accent);color:var(--text);}
+.auth-chip{
+  font-size:12px;padding:4px 12px;border-radius:20px;
+  border:1px solid var(--border);background:var(--surface2);
+  display:flex;align-items:center;gap:6px;
+  font-family:'Yu Gothic','Noto Sans JP','Microsoft YaHei','Malgun Gothic','Segoe UI',sans-serif;
+}
+.auth-chip .dot{width:7px;height:7px;border-radius:50%;background:var(--muted2);}
+.auth-chip.connected .dot{background:var(--accent2);}
+.auth-chip.connected{border-color:var(--accent2);color:var(--accent2);}
+
+/* ── Auth bar ── */
+.auth-bar{
+  background:var(--surface2);border-bottom:1px solid var(--border);
+  padding:8px 20px;display:flex;align-items:center;gap:12px;
+}
+.auth-bar.hidden{display:none;}
 
 /* ── Tabs ── */
 .tabs{
@@ -53,7 +104,7 @@ input,select{font-family:inherit;}
   padding:7px 14px;border-radius:8px;border:1px solid transparent;
   font-size:12px;font-weight:600;font-family:inherit;transition:all .15s;white-space:nowrap;cursor:pointer;
 }
-.btn-primary{background:var(--accent-btn);color:#fff;border-color:var(--accent-btn);}
+.btn-primary{background:var(--accent);color:#000;border-color:var(--accent);}
 .btn-primary:hover{opacity:.85;}
 .btn-primary:disabled{opacity:.4;cursor:not-allowed;}
 .btn-secondary{background:var(--surface2);color:var(--text);border-color:var(--border);}
@@ -81,7 +132,7 @@ input,select{font-family:inherit;}
 
 /* ── Cards ── */
 .card{
-  background:var(--read);border:1px solid var(--border);
+  background:var(--surface);border:1px solid var(--border);
   border-radius:8px;padding:16px;margin-bottom:14px;
 }
 .card-title{
@@ -272,7 +323,10 @@ input,select{font-family:inherit;}
 .tag-aspex{background:rgba(163,113,247,.15);color:var(--purple);}
 .tag-ok{background:rgba(63,185,80,.15);color:var(--accent2);}
 .tag-ng{background:rgba(248,81,73,.15);color:var(--danger);}
-.powered{display:none;}
+.powered{
+  text-align:center;padding:16px;color:var(--muted2);font-size:11px;
+  border-top:1px solid var(--border);margin-top:30px;
+}
 
 
 /* ══ D-03 통관서류 큰탭 / A4 렌더 CSS ══ */
@@ -313,7 +367,7 @@ input,select{font-family:inherit;}
 .search-row-d03{display:flex;gap:10px;}
 .search-row-d03 input{flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px;font-size:15px;color:var(--text);font-family:inherit;}
 .search-row-d03 input:focus{outline:none;border-color:var(--accent);}
-.btn-d03{background:var(--accent-btn);color:#fff;border:none;border-radius:8px;padding:12px 22px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.btn-d03{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:12px 22px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;}
 .btn-d03:hover{opacity:.88;}
 .btn-d03.secondary{background:var(--surface2);border:1px solid var(--border);color:var(--text);}
 .btn-d03.small{padding:7px 14px;font-size:12px;}
@@ -357,7 +411,7 @@ input,select{font-family:inherit;}
   body[data-print="cert"] .esl-spacer{flex:1;}
   body[data-print="cert"] .esl-doc .cert-sig-line{margin-top:65px;}
   body[data-print="cert"] .na-panel{display:none!important;}
-  body[data-print="cert"] .ln-footer{
+  body[data-print="cert"] .powered{
     display:block!important;position:fixed;bottom:0;left:0;right:0;
     text-align:center;font-size:9px;color:#888;padding:3px 0;
     border-top:0.5px solid #ccc;font-family:'Times New Roman',serif;
@@ -382,7 +436,35 @@ input,select{font-family:inherit;}
 </head>
 <body>
 
-<div id="app" style="display:none">
+<div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
+  <div style="font-size:11px;color:#fff;background:var(--accent);padding:2px 10px;border-radius:12px;font-weight:700;letter-spacing:1px;">SYS-D-03</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.45</div>
+  <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
+  <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
+  <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
+  <div id="gateStatus" style="font-size:11px;color:var(--text2);height:18px;"></div>
+</div>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="logo">LEEN<span>AI</span></div>
+  <span class="hdr-sys">SYS-D-03</span>
+  <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
+  <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
+  <div class="hdr-right">
+    <span class="hdr-ver" id="header-sub">v3.45</span>
+    <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
+    <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
+    <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
+    <button class="btn btn-sm btn-ghost" id="logoutBtn" onclick="doLogout()" style="display:none">Logout</button>
+  </div>
+</div>
+
+<div class="auth-bar" id="authBar">
+  <span style="font-size:12px;color:var(--muted)">🔒 COMPASS 認証が必要です。Login ボタンで Dataverse に接続してください。</span>
+</div>
+
 <!-- 큰 탭 -->
 <div class="big-tabs">
   <div class="big-tab active" onclick="switchBigTab('tsukan',this)">📄 通関書類</div>
@@ -610,18 +692,23 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System</div>
-</div><!-- /app -->
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.45 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
 'use strict';
 
-/* ── D-03 定数 ── */
+/* ── 統合定数 ── */
+const CLIENT_ID    = 'f071a165-5e9b-44bf-b6a1-baba654524db';
+const TENANT_ID    = 'a56988ff-c2b8-4df8-9727-889ad4205198';
+const REDIRECT_URI = 'https://mhlee205.github.io/Shipping_Document/';
 const DV_URL       = 'https://orgde512c6f.crm7.dynamics.com';
 const DV_BASE      = DV_URL + '/api/data/v9.2/';
 const DV_API       = DV_URL + '/api/data/v9.2';
+const SCOPE_DV     = DV_URL + '/user_impersonation openid profile email offline_access';
+const SCOPE_GRAPH  = 'https://graph.microsoft.com/Files.Read';
 const GRAPH_BASE   = 'https://graph.microsoft.com/v1.0/';
+const SP_DRIVE_ID  = 'b!ZK58_9YllU-vETQD3Xz0TbOInXbVCXJHnQ2280KJBArFLeM_18EgRbSeoO-TW__U';
 
 const SIGNER_MAP = {
   'kx_zhan@leenearcorp.com': 'KAIXIN ZHAN',
@@ -645,7 +732,8 @@ let DEMO_MODE = false;
 
 /* ── 統合 State ── */
 const S = {
-  signerName: 'PARK',
+  token: null, tokenExpiry: 0, userName: '',
+  graphToken: null, graphTokenExpiry: 0, signerName: 'PARK',
   booking: null, saleContract: null, saleDetails: [],
   containers: [], carrierCost: null,
   siList: [], siDetailCache: {}, regionJapan: null,
@@ -673,27 +761,155 @@ const S = {
 };
 if(typeof window!=='undefined') window.S=S;
 
+/* ── PKCE helpers ── */
+function b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
+async function sha256(str){ return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)); }
+function randomStr(len=64){ const a=new Uint8Array(len); crypto.getRandomValues(a); return b64url(a).slice(0,len); }
 function getEtd(bk){ return bk.crcf9_bl_etd || bk.cr49f_etd || null; }
 function getEta(bk){ return bk.crcf9_bl_eta || bk.cr49f_eta || null; }
 
 /* ══════════════
-   LEENAI 共通初期化
+   PKCE OAuth
 ══════════════ */
-function startTool(){
-  var u=LEENAI.user;
-  S.signerName=u?(SIGNER_MAP[u.email.toLowerCase()]||'PARK'):'PARK';
-  var badge=document.getElementById('importerBadge');
-  if(badge) badge.textContent='[—]';
-  setTimeout(function(){initBuyerSelector();},200);
+async function startLogin(){
+  const verifier=randomStr(64);
+  const challenge=b64url(await sha256(verifier));
+  const state=randomStr(16);
+  sessionStorage.setItem('pkce_v',verifier);
+  sessionStorage.setItem('pkce_s',state);
+  sessionStorage.setItem('pkce_type','dv');
+  const p=new URLSearchParams({
+    client_id:CLIENT_ID,response_type:'code',
+    redirect_uri:REDIRECT_URI,scope:SCOPE_DV,
+    state,code_challenge:challenge,code_challenge_method:'S256',
+    prompt:'select_account'
+  });
+  location.href=`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/authorize?${p}`;
 }
-LEENAI.init({
-  sys:'D-03',
-  name:'通関書類 / FINAL DOCUMENT',
-  version:'4.0',
-  date:'2026-10-08',
-  desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
-  onReady:startTool,
-});
+
+async function startGraphAuth(){
+  const verifier=randomStr(64);
+  const challenge=b64url(await sha256(verifier));
+  const state=randomStr(16);
+  sessionStorage.setItem('pkce_v',verifier);
+  sessionStorage.setItem('pkce_s',state);
+  sessionStorage.setItem('pkce_type','graph');
+  const p=new URLSearchParams({
+    client_id:CLIENT_ID,response_type:'code',
+    redirect_uri:REDIRECT_URI,scope:SCOPE_GRAPH,
+    state,code_challenge:challenge,code_challenge_method:'S256'
+  });
+  location.href=`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/authorize?${p}`;
+}
+
+function restoreDvSession(){
+  const token=sessionStorage.getItem('dv_token');
+  const expiry=Number(sessionStorage.getItem('dv_expiry')||'0');
+  const user=sessionStorage.getItem('dv_user')||'';
+  const signer=sessionStorage.getItem('dv_signer')||'PARK';
+  if(token && expiry>Date.now()){
+    S.token=token; S.tokenExpiry=expiry; S.userName=user;
+    S.signerName=signer;
+    setConnected(true);
+  }else{
+    setConnected(false);
+  }
+}
+
+async function handleCallback(){
+  const p=new URLSearchParams(location.search);
+  const code=p.get('code');
+  const type=sessionStorage.getItem('pkce_type')||'dv';
+
+  if(!code){
+    const err=p.get('error');
+    if(err && type==='graph'){
+      history.replaceState({},'',location.pathname);
+      sessionStorage.removeItem('pkce_type');
+      restoreDvSession();
+    }
+    return;
+  }
+
+  history.replaceState({},'',location.pathname);
+  const verifier=sessionStorage.getItem('pkce_v');
+  if(!verifier){showStatus('loadStatus','err','セッション期限切れ。再ログインしてください。');return;}
+
+  try{
+    const res=await fetch(
+      `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`,
+      {method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+       body:new URLSearchParams({
+         client_id:CLIENT_ID,grant_type:'authorization_code',
+         code,redirect_uri:REDIRECT_URI,code_verifier:verifier,
+         scope:type==='graph'?SCOPE_GRAPH:SCOPE_DV
+       })}
+    );
+    const data=await res.json();
+
+    if(type==='graph'){
+      sessionStorage.removeItem('pkce_type');
+      if(data.access_token){
+        S.graphToken=data.access_token;
+        S.graphTokenExpiry=Date.now()+(data.expires_in-60)*1000;
+      }
+      restoreDvSession();
+      return;
+    }
+
+    if(!data.access_token) throw new Error(data.error_description||'Token取得失敗');
+    S.token=data.access_token;
+    S.tokenExpiry=Date.now()+(data.expires_in-60)*1000;
+    if(data.id_token){
+      try{
+        const pl=JSON.parse(new TextDecoder('utf-8').decode(Uint8Array.from(atob(data.id_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0))));
+        S.userName=pl.name||pl.preferred_username||'';
+        // v1.09: 서명권자 자동 결정
+        const email=(pl.preferred_username||pl.email||'').toLowerCase();
+        S.signerName=SIGNER_MAP[email]||'PARK';
+      }catch(e){}
+    }
+    sessionStorage.setItem('dv_token',S.token);
+    sessionStorage.setItem('dv_expiry',String(S.tokenExpiry));
+    sessionStorage.setItem('dv_user',S.userName);
+    sessionStorage.setItem('dv_signer',S.signerName);
+    await startGraphAuth();
+  }catch(e){
+    showStatus('loadStatus','err','認証エラー: '+e.message);
+  }
+}
+
+function setConnected(ok){
+  const chip=document.getElementById('authChip');
+  const label=document.getElementById('authLabel');
+  const loginBtn=document.getElementById('loginBtn');
+  const logoutBtn=document.getElementById('logoutBtn');
+  const authBar=document.getElementById('authBar');
+  if(ok){
+    chip.classList.add('connected');
+    label.textContent=S.userName||'Connected';
+    loginBtn.style.display='none';
+    logoutBtn.style.display='';
+    authBar.classList.add('hidden');
+    const gate = document.getElementById('loginGate');
+    if (gate) gate.style.display = 'none';
+    // v1.39: 로그인 후 자동으로 업체 선택기 초기화
+    setTimeout(()=>initBuyerSelector(), 200);
+  }else{
+    chip.classList.remove('connected');
+    label.textContent='Not connected';
+    loginBtn.style.display='';
+    logoutBtn.style.display='none';
+    authBar.classList.remove('hidden');
+  }
+}
+
+function doLogout(){
+  S.token=null;S.tokenExpiry=0;S.userName='';
+  S.graphToken=null;S.graphTokenExpiry=0;
+  sessionStorage.clear();
+  setConnected(false);
+}
 
 function updateTabHighlights(){
   const docTabs=['qq','co','bene','ft','esl','mail','bene-mail'];
@@ -807,36 +1023,57 @@ function updateTabHighlights(){
   }
 }
 
+function updateThemeBtn(theme){
+  const btn=document.getElementById('themeToggleBtn');
+  if(!btn) return;
+  const labels={dark:'🌙 ダーク',light:'☀️ ライト',leenai:'🌿 LEENAI',focus:'🎯 FOCUS'};
+  btn.textContent=labels[theme]||'🌿 LEENAI';
+}
+function toggleTheme(){
+  const html=document.documentElement;
+  const current=html.getAttribute('data-theme')||'leenai';
+  const order=['dark','light','leenai','focus'];
+  const next=order[(order.indexOf(current)+1)%order.length];
+  html.setAttribute('data-theme',next);
+  localStorage.setItem('leenai_theme',next);
+  updateThemeBtn(next);
+}
+(function(){
+  const saved=localStorage.getItem('leenai_theme')||'leenai';
+  document.documentElement.setAttribute('data-theme',saved);
+  document.addEventListener('DOMContentLoaded',()=>updateThemeBtn(saved));
+})();
 
 /* ══════════════
    Dataverse API
 ══════════════ */
 async function graphGet(path){
-  var token=await LEENAI.auth.token('graph');
-  if(!token) throw new Error('Graph未接続');
-  var res=await fetch(GRAPH_BASE+path,{
-    headers:{'Authorization':'Bearer '+token,'Accept':'application/json'}
+  if(!S.graphToken) throw new Error('Graph未認証');
+  if(Date.now()>S.graphTokenExpiry) throw new Error('Graphセッション期限切れ');
+  const res=await fetch(`${GRAPH_BASE}${path}`,{
+    headers:{'Authorization':`Bearer ${S.graphToken}`,'Accept':'application/json'}
   });
   if(!res.ok){
-    var eg=await res.json().catch(function(){return {};});
-    throw new Error('Graph '+res.status+': '+(eg&&eg.error&&eg.error.message||res.statusText));
+    const e=await res.json().catch(()=>({}));
+    throw new Error(`Graph ${res.status}: ${e?.error?.message||res.statusText}`);
   }
   return res.json();
 }
 
 async function dvGet(path){
-  var token=await LEENAI.auth.token('dataverse');
-  var res=await fetch(DV_BASE+path,{
+  if(!S.token) throw new Error('未認証。ログインしてください。');
+  if(Date.now()>S.tokenExpiry) throw new Error('セッション期限切れ。再ログインしてください。');
+  const res=await fetch(`${DV_BASE}${path}`,{
     headers:{
-      'Authorization':'Bearer '+token,
+      'Authorization':`Bearer ${S.token}`,
       'OData-MaxVersion':'4.0','OData-Version':'4.0',
       'Accept':'application/json',
       'Prefer':'odata.include-annotations="OData.Community.Display.V1.FormattedValue"'
     }
   });
   if(!res.ok){
-    var ed=await res.json().catch(function(){return {};});
-    throw new Error('API '+res.status+': '+(ed&&ed.error&&ed.error.message||res.statusText));
+    const e=await res.json().catch(()=>({}));
+    throw new Error(`API ${res.status}: ${e?.error?.message||res.statusText}`);
   }
   return res.json();
 }
@@ -874,7 +1111,7 @@ async function loadInvoice(ivOverride){
   const ivRaw = ivOverride || (document.getElementById('ivInput')?.value||'');
   const iv=ivRaw.trim().toUpperCase();
   if(!iv){showStatus('loadStatus','warn','Invoice No. を入力してください。');return;}
-  if(LEENAI.auth.status.dataverse!=='ok'){showStatus('loadStatus','err','先にログインしてください。');return;}
+  if(!S.token){showStatus('loadStatus','err','先にログインしてください。');return;}
 
   S.invoiceNo=iv;
   showStatus('loadStatus','info','<span class="spin">⟳</span> COMPASS から取得中...');
@@ -1244,23 +1481,24 @@ async function autoLoadLcJson(){
     showStatus('lcAutoStatus','warn','⚠ LC番号または契約番号が未取得。手動読込を使用してください。');
     return;
   }
-  if(LEENAI.auth.status.graph!=='ok'){
+  if(!S.graphToken||Date.now()>S.graphTokenExpiry){
     showStatus('lcAutoStatus','warn','⚠ SharePoint未接続（Graph tokenなし）。手動読込を使用してください。');
     return;
   }
-  var lcNoClean=lcNo.split(/\s/)[0];
-  var fileName=contractNo+'_'+lcNoClean+'.json';
-  showStatus('lcAutoStatus','info','<span class="spin">⟳</span> '+fileName+' を取得中...');
-  var spPaths=[
-    '古紙/-. AI 活用/D-01-LC_FD_CHECKER/'+fileName,
-    '古紙/-. 古紙書類/▲ LC_LEENAI_JSON/'+fileName
+  const lcNoClean=lcNo.split(/\s/)[0];
+  const fileName=`${contractNo}_${lcNoClean}.json`;
+  showStatus('lcAutoStatus','info',`<span class="spin">⟳</span> ${fileName} を取得中...`);
+  const spPaths=[
+    `古紙/-. AI 活用/D-01-LC_FD_CHECKER/${fileName}`,
+    `古紙/-. 古紙書類/▲ LC_LEENAI_JSON/${fileName}`
   ];
-  var jsonData=null;
-  for(var _si=0;_si<spPaths.length;_si++){
+  let jsonData=null;
+  for(const sp of spPaths){
     try{
-      var _r=await LEENAI.sp.getJson(spPaths[_si]);
-      if(_r){jsonData=_r;break;}
-    }catch(e){}
+      const encoded=sp.split('/').map(encodeURIComponent).join('/');
+      jsonData=await graphGet(`drives/${SP_DRIVE_ID}/root:/${encoded}:/content`);
+      break;
+    }catch(e){ /* 次のパスを試す */ }
   }
   if(!jsonData){
     showStatus('lcAutoStatus','warn',`⚠ ${fileName} が見つかりません。手動読込を使用してください。`);
@@ -3653,7 +3891,7 @@ function switchSearchMode(mode){
 }
 
 async function initBuyerSelector(){
-  if(LEENAI.auth.status.dataverse!=='ok') return;
+  if(!S.token) return;
   // 既にロード済みなら再ロードしない
   if(Object.keys(S.buyerBookingsMap).length>0){
     _renderBuyerDropdown();
@@ -4976,6 +5214,14 @@ function renderIvSinoGrid2(){
   }).join('');
 }
 
+/* ── 初期化 ── */
+window.addEventListener('DOMContentLoaded', async()=>{
+  const savedTheme=localStorage.getItem('leenai_theme')||'leenai';
+  document.documentElement.dataset.theme=savedTheme;
+  const themeBtn=document.getElementById('themeToggleBtn');
+  if(themeBtn) updateThemeBtn(savedTheme);
+  await handleCallback();
+});
 
 </script>
 </body>
