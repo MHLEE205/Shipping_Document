@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.43</title>
+<title>SYS-D-03 | 通関書類 / FINAL DOCUMENT 統合ツール v3.45</title>
 <style>
 
 /* ── Base ── */
@@ -439,7 +439,7 @@ input,select{font-family:inherit;}
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:var(--text);">LEEN<span style="color:var(--accent)">AI</span></div>
   <div style="font-size:11px;color:#fff;background:var(--accent);padding:2px 10px;border-radius:12px;font-weight:700;letter-spacing:1px;">SYS-D-03</div>
-  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.43</div>
+  <div style="font-size:13px;color:var(--text2);font-weight:500;">通関書類 / FINAL DOCUMENT 統合ツール v3.45</div>
   <div style="width:48px;height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.8;">このツールを使用するには<br>COMPASSアカウントでのログインが必要です</div>
   <button onclick="startLogin()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 COMPASSログイン</button>
@@ -453,7 +453,7 @@ input,select{font-family:inherit;}
   <span class="hdr-title">通関書類 / FINAL DOCUMENT 統合ツール</span>
   <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn)">[—]</span>
   <div class="hdr-right">
-    <span class="hdr-ver" id="header-sub">v3.43</span>
+    <span class="hdr-ver" id="header-sub">v3.45</span>
     <div class="auth-chip" id="authChip"><span class="dot"></span><span id="authLabel">Not connected</span></div>
     <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">🌙 ダーク</button>
     <button class="btn btn-sm btn-primary" id="loginBtn" onclick="startLogin()">🔑 Login</button>
@@ -533,6 +533,7 @@ input,select{font-family:inherit;}
     </div>
     <div class="preview-col">
       <div id="no45Warn" class="no45-warn no-print" style="display:none"></div>
+      <div id="siXxWarn" class="no45-warn no-print" style="display:none"></div>
       <div id="allDocActions" style="display:none;padding:0 0 10px;display:flex;gap:8px;flex-wrap:wrap;">
         <button onclick="printAllDocs()" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">🖨 全て印刷 (IV+PL+SI)</button>
         <button onclick="downloadExcel()" style="background:#22863a;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">📊 Excel ダウンロード</button>
@@ -691,7 +692,7 @@ input,select{font-family:inherit;}
 </div>
 </div>
 
-<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.43 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
+<div class="powered">✦ Powered by LEENAI Automation System &nbsp;|&nbsp; SYS-D-03 統合書類ツール v3.45 &nbsp;|&nbsp; LEENEAR CORPORATION</div>
 
 <script>
 
@@ -1282,14 +1283,28 @@ async function loadInvoice(ivOverride){
 }
 
 /* ══════════════════════════════════════
-   v3.41: PL の コンテナTYPE を記載しない業者 (LC 47A「45' コンテナ不可」)
-   COMPASS の type 値(例: 45GP)が 45フィートと誤読されるため、銀行・輸入者了承のうえ PL は TYPE 未記載とする。
-   判別: ① Invoice No. 先頭 (NIK / NTJ)  ② COMPASS S/I の consignee・notify party・住所に社名
+   v3.41: PL の コンテナTYPE を記載しない業者
+   - INDAH KIAT / TJIWI KIMIA: LC 47A「45' コンテナ不可」。COMPASS の type 値(例: 45GP)が 45フィートと誤読されるため、銀行・輸入者了承のうえ PL は TYPE 未記載。
+   - MEGA SURYA (v3.45): LC に TYPE の規定はないが、PL に TYPE を記載する場合は B/L との一致が必須のため未記載 (最小対応)。
+     ※ 20フィート・特殊コンテナ(RAD 等)は TYPE の記載が必要 → 該当コンテナがあるときは配信前に確認を促す警告を追加 (warnNon40)。
+   判別: ① Invoice No. 先頭 (NIK / NTJ / NMG)  ② COMPASS S/I の consignee・notify party・住所に社名
 ══════════════════════════════════════ */
 const NO_CT_TYPE_IMPORTERS=[
-  {name:'INDAH KIAT',  prefix:'NIK', re:/INDAH\s*KIAT/i},
-  {name:'TJIWI KIMIA', prefix:'NTJ', re:/TJIWI\s*KIMIA/i},
+  {name:'INDAH KIAT',  prefix:'NIK', re:/INDAH\s*KIAT/i,
+   msg:"⚠ INDAH KIAT / TJIWI KIMIA: LC 47A「45' コンテナ不可」のため、PL の コンテナTYPE は記載しません（銀行・輸入者了承済み）。Excel の PL シートも TYPE 列は空欄です。"},
+  {name:'TJIWI KIMIA', prefix:'NTJ', re:/TJIWI\s*KIMIA/i,
+   msg:"⚠ INDAH KIAT / TJIWI KIMIA: LC 47A「45' コンテナ不可」のため、PL の コンテナTYPE は記載しません（銀行・輸入者了承済み）。Excel の PL シートも TYPE 列は空欄です。"},
+  {name:'MEGA SURYA',  prefix:'NMG', re:/MEGA\s*SURYA/i, warnNon40:true,
+   msg:"⚠ MEGA SURYA: PL の コンテナTYPE は B/L との一致を保証できないため記載しません（LC に TYPE の規定なし）。Excel の PL シートも TYPE 列は空欄です。"},
 ];
+function _no45Message(m){   // 業者別メッセージ + (MEGA SURYA) 40フィート以外 / 特殊コンテナがある場合の確認喚起
+  let msg=m.msg||'';
+  if(m.warnNon40){
+    const odd=[...new Set((S.containers||[]).map(c=>String(c.crcf9_type||'').trim()).filter(t=>t&&!/^4/.test(t)))];
+    if(odd.length) msg+=' ⚠ 40フィート以外 / 特殊コンテナあり ('+_escH(odd.join(', '))+'): PL に TYPE の記載が必要か必ず確認してください。';
+  }
+  return msg;
+}
 function getNoCtTypeImporter(){
   const iv=String((S.booking&&S.booking.cr49f_invoice_no)||S.invoiceNo||'').toUpperCase();
   const texts=[S.importerName,S.importerAddr];
@@ -1308,7 +1323,7 @@ function updateNo45Warn(){
     const el=document.getElementById(id);
     if(!el) return;
     if(hit){
-      el.innerHTML="⚠ INDAH KIAT / TJIWI KIMIA: LC 47A「45' コンテナ不可」のため、PL の コンテナTYPE は記載しません（銀行・輸入者了承済み）。Excel の PL シートも TYPE 列は空欄です。";
+      el.innerHTML=_no45Message(hit);
       el.style.display='block';
     } else {
       el.innerHTML=''; el.style.display='none';
@@ -1316,12 +1331,60 @@ function updateNo45Warn(){
   });
 }
 
+/* ══════════════════════════════════════
+   v3.44: S/I に「XX」(出荷後に確定する値の仮表記) が残っている場合の印刷前警告
+   - 検出: 英数字の直後ではない「XX」以上の連続 X (MAXX / TAXXI / コンテナ番号などは対象外)
+   - 対象: S/I のみ。IV・PL の「VESSEL FLAG: XX」は出発前に確定できないため許容 (형님 決定 2026-10-06)
+   - 動作: 印刷 / Excel ダウンロード直前に確認ダイアログ (OK=続行 / キャンセル=中止) + プレビュー上部に赤色バナー。書類本文には表示しない。
+══════════════════════════════════════ */
+const XX_PLACEHOLDER_RX=/(?:^|[^A-Za-z0-9])X{2,}/;
+function _xxLinesFromText(text,out){
+  String(text||'').split(/\r?\n/).forEach(l=>{
+    const t=l.trim();
+    if(t&&XX_PLACEHOLDER_RX.test(t)&&!out.includes(t)) out.push(t);
+  });
+}
+function findSiXxLines(){            // 画面上の S/I (#doc-si) から「XX」を含む行を収集
+  const out=[];
+  const el=document.getElementById('doc-si');
+  if(!el) return out;
+  el.querySelectorAll('*').forEach(n=>{
+    const own=Array.from(n.childNodes).filter(c=>c.nodeType===3).map(c=>c.textContent).join('');
+    if(own) _xxLinesFromText(own,out);
+  });
+  return out;
+}
+function _xxConfirm(lines,kind){
+  const list=lines.slice(0,8).map(l=>'・'+(l.length>70?l.slice(0,70)+'…':l)).join('\n')
+    +(lines.length>8?'\n…他 '+(lines.length-8)+' 件':'');
+  return confirm('⚠ S/I に「XX」が残っています。\n\n'+list+'\n\nCOMPASS の S/I 文言を確認してください。\nこのまま'+kind+'しますか？\n（OK = 続ける / キャンセル = 中止）');
+}
+function confirmSiXx(kind){          // 印刷用: true=続行 / false=中止
+  const lines=findSiXxLines();
+  return lines.length?_xxConfirm(lines,kind):true;
+}
+function confirmSiXxRows(rows,kind){ // Excel S/I シート用
+  const lines=[];
+  (rows||[]).forEach(r=>(r||[]).forEach(v=>{ if(typeof v==='string') _xxLinesFromText(v,lines); }));
+  return lines.length?_xxConfirm(lines,kind):true;
+}
+function updateSiXxWarn(){
+  const el=document.getElementById('siXxWarn');
+  if(!el) return;
+  const lines=findSiXxLines();
+  if(lines.length){
+    el.innerHTML='⚠ S/I に「XX」が残っています (印刷前に確認): '+_escH(lines.slice(0,3).join(' / '))
+      +(lines.length>3?' …他 '+(lines.length-3)+' 件':'');
+    el.style.display='block';
+  } else { el.innerHTML=''; el.style.display='none'; }
+}
+
 function hideDataCards(){
   ['dataCard','podCard','ctCard','lcCard','goPanel'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.style.display='none';
   });
-  ['no45Warn','no45WarnFD'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  ['no45Warn','no45WarnFD','siXxWarn'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
 }
 
 function renderDataCard(){
@@ -4053,6 +4116,7 @@ function showPreview(which){
 }
 
 function printPage(which){
+  if(which==='si' && !confirmSiXx('印刷')) return; // v3.44: S/I に XX が残っていれば確認
   const el=document.getElementById('doc-'+which);
   const _iv=S.invoiceNo||'';
   const _fnMap={invoice:`${_iv}_IV`,pl:`${_iv}_PL`,si:`${_iv}_SI`};
@@ -4710,6 +4774,7 @@ function renderSI(){
   });
 
   buildDocWrap('si', [p1, ...p2pages]);
+  updateSiXxWarn(); // v3.44
 }
 function itemNameForContainer(c){
   const key = c['_crcf9_sale_detail_id_value'] || c.crcf9_sale_detail_id;
@@ -4834,6 +4899,7 @@ function renderAllDocs(){
 }
 
 function printAllDocs(){
+  if(!confirmSiXx('印刷')) return; // v3.44: S/I に XX が残っていれば確認
   const _iv=S.invoiceNo||'';
   const _origTitle=document.title;
   document.title=`${_iv}_IV_PL_SI`;
@@ -4990,6 +5056,7 @@ function downloadExcel(){
   ];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(siRows),'SI');
 
+  if(!confirmSiXxRows(siRows,'Excel をダウンロード')) return; // v3.44: S/I シートに XX が残っていれば確認
   XLSX.writeFile(wb,`${iv}_docs.xlsx`);
 }
 
