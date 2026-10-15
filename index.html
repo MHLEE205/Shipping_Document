@@ -540,6 +540,7 @@ input,select{font-family:inherit;}
 
     <div id="goPanel" style="display:none;margin-top:4px;">
       <button class="btn btn-success" onclick="buildAll()">✅ 全書類を生成 → 各タブへ</button>
+      <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn);margin-left:10px;">[—]</span>
     </div>
   </div>
   <div class="panel" id="panel-qq">
@@ -689,8 +690,8 @@ function startTool(){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.0',
-  date:'2026-10-08',
+  version:'4.1',
+  date:'2026-10-15',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   onReady:startTool,
 });
