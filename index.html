@@ -713,8 +713,8 @@ function startTool(){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.3',
-  date:'2026-10-20',
+  version:'4.4',
+  date:'2026-10-23',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   onReady:startTool,
 });
@@ -1584,12 +1584,12 @@ function buildAll(){
       renderBeneCertDT();
       updateBadge('b-bene','✓');
     } else if(['VAN_DIEM','XUAN_MAI'].includes(S.importer)){
-      renderBeneCertSimple();
-      updateBadge('b-bene','✓');
+      S._beneSrcWarn=[];   // v4.4
+      updateBadge('b-bene',renderBeneCertSimple()?'✓':'⚠');
       if(S.importer==='XUAN_MAI'){
-        renderBeneCertMailNXM();
+        const _okM=renderBeneCertMailNXM();
         showTab('bene-mail');
-        updateBadge('b-bene-mail','✓');
+        updateBadge('b-bene-mail',_okM?'✓':'⚠');
       }
     } else {
       renderNAForPanel('bene-na-placeholder','この業者は Beneficiary Certificate 不要');
@@ -2110,9 +2110,9 @@ function runLcVerify(){
   const compassLc=S.siHeader?.cr49f_lc_no||'';
   const jsonLc=lc.lcNo||'';
   results.push({
-    badge:compassLc===jsonLc?'OK':'NG',
+    badge:_lcNoKey(compassLc)===_lcNoKey(jsonLc)?'OK':'NG',   // v4.4: LC 番号部分のみ比較
     text:`LC No. 整合: COMPASS="${compassLc}" / LC JSON="${jsonLc}"`,
-    status:compassLc===jsonLc?'ok':'ng'
+    status:_lcNoKey(compassLc)===_lcNoKey(jsonLc)?'ok':'ng'
   });
 
   if(S.importer === 'ASIA_PAPER'){
@@ -2348,21 +2348,145 @@ function lcDocDeclaration(raw){   // 「…CERTIFYING THAT」以降の宣言文 
 function lcDocKind(raw){   // 'FREE_TIME' | 'FREE_TIME_CARRIER'(船会社のみ発行) | 'BENE' | null
   const t=lcDocBody(raw).toUpperCase();
   if(!/CERTIF/.test(t)) return null;
-  if(/(DEMURRAGE|DETENTION|FREE TIME)/.test(t)) return /BENEFICIARY/.test(t)?'FREE_TIME':'FREE_TIME_CARRIER';
-  if(/^BENEFICIARY'?S\s+CERTIFICATE/.test(t)) return 'BENE';
+  if(/(DEMURRAGE|DETENTION|FREE TIME)/.test(t)) return /BENEFICIARY|\bBEN'?S\b|\bBENE\b/.test(t)?'FREE_TIME':'FREE_TIME_CARRIER';   // v4.4: BEN'S CERTIFICATE も受益者
+  if(/^(?:BENEFICIARY|BEN)'?S\s+CERTIFICATE|^BENE\s+CERT/.test(t)) return 'BENE';
   return null;
 }
+/* ══════════════════════════════════════
+   v4.4: LC 文言抽出エンジン — SharePoint の LC JSON 104件の実例 (9社) から規則を作成
+   【文言の取り出し方 (46A / 47A 共通)】
+     導入句: CERTIFYING (THAT) / EVIDENCING THAT / STATING (THAT) / DECLARING (THAT) / CONFIRMING (THAT) /
+             INDICATING (THAT) / MUST SHOW / MUST SHOWN / MUST STATE   … の直後から
+     終わり: ". IF THE BENEFICIARY …" / "; IF …" / ". THIS CERTIFICATE IS NOT REQUIRED …" / "(NOT REQUIRED …" /
+             "(ISSUED BY …" / 次の項目番号 / "-----" / 47A / ADDITIONAL CONDITIONS / "— 03 ORIGINALS" の直前まで
+   【出典の優先順位】 LC 原文 (rawText の 46A 項目) → (呼び出し側で COMPASS) → LC JSON の要約 (docs46A, 要照合警告)
+     ※ docs46A は AI の要約で表現が変わる例あり (SHOULD BE SENT→HAS BEEN SENT, MUST SHOWN→MUST STATE)
+     ※ rawText が日本語の要約になっている LC もあるため、日本語を含む項目は原文として扱わない
+   【47A の Free Time 条件】 BENE_OK(受益者証明可) / CARRIER(B/L・船会社証明のみ) / COND(条件文) / INFO(参考のみ)
+══════════════════════════════════════ */
+const LC_LEADS=[   // 優先順: 「…THAT」 → MUST SHOW/STATE → THAT 無し → INDICATING (文中の INDICATING を先に拾わないため)
+  /\b(?:CERTIFYING|CERTIFY|EVIDENCING|STATING|DECLARING|CONFIRMING)\s+THAT\s+/i,
+  /\bMUST\s+(?:SHOWN?|STATE|INDICATE)\s+(?:THAT\s+)?/i,
+  /\b(?:CERTIFYING|EVIDENCING|STATING|DECLARING|CONFIRMING)\s+/i,
+  /\bINDICATING\s+(?:THAT\s+)?/i];
+const LC_END_RX=/\.\s*(?=IF\s+THE\s+BENEFICIARY)|;\s*IF\s|\.?\s*THIS\s+CERTIFICATE\s+IS\s+NOT\s+REQUIRED|\s*\(\s*NOT\s+REQUIRED|\s*\(\s*ISSUED\s+BY|\.\s+(?=\d{1,2}\s*[.)\/]\s)|"\s*,|\s-{3,}|\s:?\s*47A\b|\s+ADDITIONAL\s+CONDITIONS|\s*[—–]\s*\d+\s*ORIGINALS?\b/i;
+const LC_CJK_RX=/[\u3040-\u30ff\u4e00-\u9fff]/;
+function _lcStripNotes(v){   // AI 要約に付いた日本語の注記 「（枚数記載なし）」等を除去
+  return String(v||'').replace(/[（(][^（()）]*[\u3040-\u30ff\u4e00-\u9fff][^（()）]*[）)]/g,' ').replace(/\s+/g,' ').trim();
+}
+function lcStatement(text){      // 証明文言 (大文字・句点1つ) / 見つからなければ ''
+  const t=_lcStripNotes(text);
+  if(!t||LC_CJK_RX.test(t)) return '';
+  let m=null;
+  for(const rx of LC_LEADS){ m=t.match(rx); if(m) break; }
+  if(!m) return '';
+  let v=t.slice(m.index+m[0].length);
+  const e=v.search(LC_END_RX); if(e>=0) v=v.slice(0,e);
+  v=v.replace(/^[\s(]+/,'');
+  while((v.match(/\)/g)||[]).length>(v.match(/\(/g)||[]).length && /\)\s*[.;]?\s*$/.test(v)) v=v.replace(/\)\s*[.;]?\s*$/,'');
+  v=v.replace(/[\s.;:,]+$/,'').trim();
+  return v?v.toUpperCase()+'.':'';
+}
+function lcRawDocItems(raw){     // rawText の 46A を項目単位に分解 (原文でない項目は除外)
+  let t=String(raw||''); if(!t) return [];
+  t=t.replace(/^.*\*\s*\*\s*\*.*$/gm,' ').replace(/-\s*CONTINUE\s*-/gi,' ');   // SWIFT 印刷のページ見出し
+  const st=t.search(/:?\s*46A\b|DOCUMENTS\s+REQUIRED/i);
+  let sec=st>=0?t.slice(st):t;
+  const en=sec.slice(6).search(/:?\s*47A\b|ADDITIONAL\s+CONDITIONS/i);
+  if(en>=0) sec=sec.slice(0,en+6);
+  if(LC_CJK_RX.test(sec)) return [];   // rawText が日本語の要約 → 原文として使わない
+  sec=sec.replace(/\s+/g,' ');
+  return sec.split(/(?:\s|["',]\s*)(?=\d{1,2}\s*[.)\/]\s*[A-Z(])/).map(x=>{
+    const m=x.match(/^(\d{1,2})\s*[.)\/]\s*/);
+    return {no:m?m[1]:'',text:(m?x.slice(m[0].length):x).replace(/^[\s"',]+|[\s"',]+$/g,'').trim()};
+  }).filter(x=>x.text.length>15);
+}
+function lcFreeTime47A(text){    // 47A の Free Time 条件 → {kind,text,raw,src} / null
+  const t=String(text||'').replace(/\s+/g,' ');
+  if(!t||LC_CJK_RX.test(t)) return null;
+  const items=t.split(/\s(?=\d{1,2}\s*[.)]\s)|\s(?=['’]-)/);
+  for(const it of items){
+    if(!/FREE\s+(?:TIME|DEMURRAGE|DETENTION)|\d+\s+DAYS?\s+FREE/i.test(it)) continue;
+    const kind=/INFORMATION\s+ONLY|MUST\s+COVER\s+\d+\s+DAYS/i.test(it)?'INFO'
+      :/BENEFICIAR(?:Y|IES)'?S?\s+CERTIFICATE|\bBEN'?S\s+CERTIFICATE/i.test(it)?'BENE_OK'
+      :/\bB\/?L\b|BILL\s+OF\s+LADING|SHIPPING\s+CERTIFICATE/i.test(it)?'CARRIER':'COND';
+    const m=it.match(/(?:MINIMUM\s+|AT\s+LEAST\s+)?\d+\s+DAYS?\s+FREE[\s\S]*?(?=\s+(?:(?:MUST|SHOULD)\s+BE\s+)?(?:WRITTEN|MENTIONED|STATED|SHOWN|INDICATED)\s+ON\b|\.\s|\.?\s*$)/i);
+    const v=m?m[0].replace(/[\s.;:,]+$/,'').trim().toUpperCase():'';
+    return {kind,text:v?v+'.':'',raw:it.replace(/^\d{1,2}\s*[.)]\s*/,'').trim(),src:'LC 47A'};
+  }
+  return null;
+}
+function lcRaw47A(raw){        // rawText の 47A 区間 (原文のときのみ)
+  let t=String(raw||'').replace(/^.*\*\s*\*\s*\*.*$/gm,' ');
+  const st=t.search(/:?\s*47A\b|ADDITIONAL\s+CONDITIONS/i); if(st<0) return '';
+  t=t.slice(st);
+  const en=t.slice(6).search(/:?\s*71[A-Z]\b|\bCHARGES\s*:|:?\s*48\b|PERIOD\s+FOR\s+PRESENTATION/i);
+  if(en>=0) t=t.slice(0,en+6);
+  return LC_CJK_RX.test(t)?'':t;
+}
+function _lcDigits(v){ return (String(v||'').match(/\d+/g)||[]).map(Number).join(','); }
+function _normStmt(v){ return String(v||'').toUpperCase().replace(/^\s*WE,?\s+LEENEAR\s+CORPORATION\s+HEREBY\s+DECLARE\s+THAT\s*:?/,'').replace(/[^A-Z0-9]/g,''); }
+function _lcNoKey(v){ return String(v||'').toUpperCase().replace(/\s+DATED\b[\s\S]*$/,'').trim().split(/\s+/)[0]||''; }   // v4.4
 function getLcCertRequirements(){
-  const docs=(S.lcJson&&Array.isArray(S.lcJson.docs46A))?S.lcJson.docs46A:null;
-  const out={loaded:!!docs,freeTime:null,bene:[],carrierOnly:false};
+  const lc=S.lcJson;
+  const docs=(lc&&Array.isArray(lc.docs46A))?lc.docs46A:null;
+  const out={loaded:!!docs,freeTime:null,freeTime47A:null,bene:[],carrierOnly:false,warn:[]};
   if(!docs) return out;
+  const rawItems=lcRawDocItems(lc.rawText);
+  const used=new Set(), cnt={BENE:0,FREE_TIME:0};
+  const pickRaw=(kind,no)=>{
+    let r=no?rawItems.find(x=>x.no===no&&!used.has(x)&&lcDocKind(x.text)===kind):null;
+    if(!r) r=rawItems.filter(x=>!used.has(x)&&lcDocKind(x.text)===kind)[0];
+    if(r) used.add(r);
+    return r||null;
+  };
   docs.forEach(d=>{
-    const k=lcDocKind(d);
-    if(k==='FREE_TIME'){ if(!out.freeTime) out.freeTime={text:lcDocDeclaration(d),raw:lcDocBody(d)}; }
-    else if(k==='BENE') out.bene.push({text:lcDocDeclaration(d),raw:lcDocBody(d)});
-    else if(k==='FREE_TIME_CARRIER') out.carrierOnly=true;
+    const k=lcDocKind(d); if(!k) return;
+    if(k==='FREE_TIME_CARRIER'){ out.carrierOnly=true; return; }
+    const no=(String(d).match(/^\s*(\d{1,2})\s*[.)\/]/)||[])[1]||'';
+    const r=pickRaw(k,no);
+    const okFt=v=>k!=='FREE_TIME'||/\bDAYS?\b|\bFREE\b/i.test(v);   // Free Time 文言に日数・FREE が無いものは無効
+    let rawTxt=r?lcStatement(r.text):'', sumTxt=lcStatement(lcDocBody(d));
+    if(!okFt(rawTxt)) rawTxt=''; if(!okFt(sumTxt)) sumTxt='';
+    const label=(k==='BENE'?'Beneficiary\'s Certificate':'Free Time')+(no?' (46A '+no+')':'');
+    if(rawTxt&&sumTxt&&_lcDigits(rawTxt)!==_lcDigits(sumTxt))
+      out.warn.push(label+': LC 原文と LC JSON 要約で数字が異なります (原文を使用) — 原文「'+rawTxt+'」/ 要約「'+sumTxt+'」');
+    const item={text:rawTxt||sumTxt,raw:r?r.text:lcDocBody(d),src:rawTxt?'LC原文':(sumTxt?'LC要約':'')};
+    if(k==='BENE'){
+      if(item.src==='LC要約') out.warn.push(label+': LC 原文が見つからないため LC JSON の要約から作成しました — LC 原文と照合してください。');
+      out.bene.push(item);
+    } else if(!out.freeTime) out.freeTime=item;
+    cnt[k]++;
   });
+  const f47=lcFreeTime47A(lc.addCond47A)||lcFreeTime47A(lcRaw47A(lc.rawText));
+  out.freeTime47A=f47;
+  if(!out.freeTime&&f47){
+    if(f47.kind==='BENE_OK') out.freeTime={text:f47.text,raw:f47.raw,src:f47.src};
+    else if(f47.kind==='CARRIER') out.carrierOnly=true;
+  }
   return out;
+}
+/* v4.4: VAN DIEM / XUAN MAI の Bene (Free Time) 文言 — LC 原文 → COMPASS → LC 要約 → 無し(警告) */
+function _stripDeclarePrefix(v){ return String(v||'').replace(/^\s*WE,?\s+LEENEAR\s+CORPORATION\s+HEREBY\s+DECLARE\s+THAT\s*:?\s*/i,'').trim(); }
+function _addPrefix(a){ a=String(a||'').trim(); return a?(/^ADD(?:RESS)?\s*[:.]/i.test(a)?a:'ADD: '+a):''; }   // v4.4: 「ADD: ADD:」防止
+function getBeneFreeTimeText(){
+  S._beneSrcWarn=S._beneSrcWarn||[];
+  const warn=m=>{ if(S._beneSrcWarn.indexOf(m)<0) S._beneSrcWarn.push(m); };
+  const r=getLcCertRequirements();
+  (r.warn||[]).forEach(warn);
+  const cand=r.freeTime||r.freeTime47A||null;
+  const compass=_stripDeclarePrefix(S.beneCertText||'');
+  const lcAuth=cand&&cand.text&&(cand.src==='LC原文'||cand.src==='LC 47A');
+  if(lcAuth){
+    if(compass&&_normStmt(compass)!==_normStmt(cand.text)) warn('COMPASS S/I の Bene Cert 文言は LC 原文と異なるため、LC 原文を使用しました。');
+    return {text:cand.text,src:cand.src};
+  }
+  if(compass) return {text:compass,src:'COMPASS'};
+  if(cand&&cand.text){ warn('Free Time 文言を LC JSON の要約から作成しました — LC 原文と照合してください。'); return {text:cand.text,src:cand.src}; }
+  const msg=r.loaded?'LC JSON (46A / 47A) から Free Time 文言を取得できず、COMPASS S/I の Bene Cert 欄も空です。書類を生成していません。'
+                    :'LC JSON 未読込 — Free Time 文言を判定できません (COMPASS S/I の Bene Cert 欄も空)。LC JSON を読込んでから再生成してください。';
+  warn(msg);
+  return {text:'',src:'',msg};
 }
 /* COMPASS S/I の Free Time 文言 (全S/I から。選択S/I優先) — 改行を保持 */
 function getCompassFreeTimeText(){
@@ -2470,6 +2594,7 @@ function lcCertDocHtml(declHtml){
 function renderLcDrivenCerts(){
   S._lcCertWarn=[];
   const r=getLcCertRequirements();
+  (r.warn||[]).forEach(m=>S._lcCertWarn.push(m));   // v4.4
   const beneEl=document.getElementById('doc-bene');
   const redPanel=(msg)=>`<div class="na-panel" style="color:#c00;font-weight:700;">⚠ ${_escH(msg)}</div>`;
   const ensureFtPanel=()=>{
@@ -2507,8 +2632,18 @@ function renderLcDrivenCerts(){
     renderNAForPanel('ft-content',r.carrierOnly?'LC 46A の Free Time 証明書は船会社発行のみ — 生成不要':'LC 46A に Free Time Certificate の要件なし');
     updateBadge('b-ft','N/A');
   } else {
-    const compassText=getCompassFreeTimeText();           // COMPASS S/I 優先 (改行保持)
-    const ftText=compassText||r.freeTime.text;            // 無ければ LC
+    // v4.4: LC 原文 → COMPASS S/I → LC JSON 要約 の順
+    const compassText=getCompassFreeTimeText();
+    let ftText='';
+    if(r.freeTime.text&&(r.freeTime.src==='LC原文'||r.freeTime.src==='LC 47A')){
+      ftText=r.freeTime.text;
+      if(compassText&&_normStmt(compassText)!==_normStmt(ftText)) S._lcCertWarn.push('COMPASS S/I の Free Time 文言は LC 原文と異なるため、LC 原文を使用しました。');
+    } else if(compassText){
+      ftText=compassText;
+    } else if(r.freeTime.text){
+      ftText=r.freeTime.text;
+      S._lcCertWarn.push('Free Time 文言を LC JSON の要約から作成しました — LC 原文と照合してください。');
+    }
     ensureFtPanel();
     if(!ftText){
       document.getElementById('doc-ft').innerHTML=redPanel('LC 46A の Free Time 文言を抽出できません: '+r.freeTime.raw);
@@ -2524,7 +2659,8 @@ function renderLcDrivenCerts(){
   }
 }
 function _lcWarnText(){
-  const w=(S.importer==='GENERIC')?((S._idWarn||[]).concat(S._lcCertWarn||[])):[];
+  const w=(S.importer==='GENERIC')?((S._idWarn||[]).concat(S._lcCertWarn||[]))
+         :(['VAN_DIEM','XUAN_MAI'].includes(S.importer)?(S._beneSrcWarn||[]):[]);   // v4.4
   return w.length?('\n\n⚠ '+w.join('\n⚠ ')):'';
 }
 
@@ -3736,8 +3872,12 @@ function renderBeneCertMailNXM(){
   const toEmail=S.importerEmail||S.importerName||'—';
   const nwMt=S.totalNwMt.toFixed(2);
 
-  const declare=S.beneCertText||
-    'LEAST 10 DAYS FREE TIME OF DEMURRAGE AND 04 DAYS OF DETENTION AT DESTINATION PORT.';
+  const _ft=getBeneFreeTimeText();   // v4.4: 固定文言を廃止
+  if(!_ft.text){
+    document.getElementById('doc-bene-mail').innerHTML=`<div class="na-panel" style="color:#c00;font-weight:700;">⚠ ${_escH(_ft.msg)}</div>`;
+    return false;
+  }
+  const declare=_escH(_ft.text).replace(/\r?\n/g,'<br>');
 
   document.getElementById('doc-bene-mail').innerHTML=`
     ${certHeader()}
@@ -3756,7 +3896,7 @@ function renderBeneCertMailNXM(){
     <div class="cert-party-block" style="font-size:12px;margin-bottom:6px;">
       <div class="cert-exporter-label">IMPORTER</div>
       ${S.importerName||'—'}<br>
-      ${S.importerAddr?'ADD: '+S.importerAddr:''}
+      ${_addPrefix(S.importerAddr)}
     </div>
     <div class="ft-declare" style="font-size:12.5px;margin-bottom:6px;">
       WE, LEENEAR CORPORATION HEREBY DECLARE THAT: ${declare}
@@ -3815,6 +3955,7 @@ function renderBeneCertMailNXM(){
     ${certBottom()}
     <div class="cert-spacer"></div>
     ${certSig()}`;
+  return true;
 }
 
 
@@ -3836,8 +3977,12 @@ function renderBeneCertSimple(){
   const lc=getLcNo();
   const product=getProductText('<br>');
 
-  const declare=S.beneCertText||
-    'WE, LEENEAR CORPORATION HEREBY DECLARE THAT: LEAST 10 DAYS FREE TIME OF DEMURRAGE AND 04 DAYS OF DETENTION AT DESTINATION PORT.';
+  const _ft=getBeneFreeTimeText();   // v4.4: 固定文言を廃止
+  if(!_ft.text){
+    document.getElementById('doc-bene').innerHTML=`<div class="na-panel" style="color:#c00;font-weight:700;">⚠ ${_escH(_ft.msg)}</div>`;
+    return false;
+  }
+  const declare='WE, LEENEAR CORPORATION HEREBY DECLARE THAT: '+_escH(_ft.text).replace(/\r?\n/g,'<br>');
 
   document.getElementById('doc-bene').innerHTML=`
     ${certHeader()}
@@ -3855,7 +4000,7 @@ function renderBeneCertSimple(){
     <div class="cert-party-block">
       <div class="cert-exporter-label">IMPORTER</div>
       ${S.importerName||'—'}<br>
-      ${S.importerAddr?'ADD: '+S.importerAddr:''}
+      ${_addPrefix(S.importerAddr)}
       ${S.importerTel?'<br>'+S.importerTel+(S.importerFax?'&nbsp;&nbsp;'+S.importerFax:''):''}
     </div>
     <div class="ft-declare">${declare}</div>
@@ -3869,6 +4014,7 @@ function renderBeneCertSimple(){
     ${certBottom()}
     <div class="cert-spacer"></div>
     ${certSig()}`;
+  return true;
 }
 
 /* ══════════════════════════════════════
