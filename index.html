@@ -713,7 +713,7 @@ function startTool(){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.4',
+  version:'4.6',
   date:'2026-10-23',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   onReady:startTool,
@@ -2362,6 +2362,9 @@ function lcDocKind(raw){   // 'FREE_TIME' | 'FREE_TIME_CARRIER'(船会社のみ�
    【出典の優先順位】 LC 原文 (rawText の 46A 項目) → (呼び出し側で COMPASS) → LC JSON の要約 (docs46A, 要照合警告)
      ※ docs46A は AI の要約で表現が変わる例あり (SHOULD BE SENT→HAS BEEN SENT, MUST SHOWN→MUST STATE)
      ※ rawText が日本語の要約になっている LC もあるため、日本語を含む項目は原文として扱わない
+     ※ v4.5: rawText が D-01 の AI 応答 JSON (先頭4000字で切れている) の場合も原文として扱わない (全件検証で6件確認)
+             「--- Page N ---」は除去、TRAILER / ** END ** は文の終わり
+     ※ v4.6: 原文に混入した記号 (■ ● ◆ 等) を除去 (全件検証で XSD に「■」を確認)
    【47A の Free Time 条件】 BENE_OK(受益者証明可) / CARRIER(B/L・船会社証明のみ) / COND(条件文) / INFO(参考のみ)
 ══════════════════════════════════════ */
 const LC_LEADS=[   // 優先順: 「…THAT」 → MUST SHOW/STATE → THAT 無し → INDICATING (文中の INDICATING を先に拾わないため)
@@ -2369,10 +2372,12 @@ const LC_LEADS=[   // 優先順: 「…THAT」 → MUST SHOW/STATE → THAT 無�
   /\bMUST\s+(?:SHOWN?|STATE|INDICATE)\s+(?:THAT\s+)?/i,
   /\b(?:CERTIFYING|EVIDENCING|STATING|DECLARING|CONFIRMING)\s+/i,
   /\bINDICATING\s+(?:THAT\s+)?/i];
-const LC_END_RX=/\.\s*(?=IF\s+THE\s+BENEFICIARY)|;\s*IF\s|\.?\s*THIS\s+CERTIFICATE\s+IS\s+NOT\s+REQUIRED|\s*\(\s*NOT\s+REQUIRED|\s*\(\s*ISSUED\s+BY|\.\s+(?=\d{1,2}\s*[.)\/]\s)|"\s*,|\s-{3,}|\s:?\s*47A\b|\s+ADDITIONAL\s+CONDITIONS|\s*[—–]\s*\d+\s*ORIGINALS?\b/i;
+const LC_END_RX=/\.\s*(?=IF\s+THE\s+BENEFICIARY)|;\s*IF\s|\.?\s*THIS\s+CERTIFICATE\s+IS\s+NOT\s+REQUIRED|\s*\(\s*NOT\s+REQUIRED|\s*\(\s*ISSUED\s+BY|\.\s+(?=\d{1,2}\s*[.)\/]\s)|"\s*,|\s-{3,}|\s:?\s*47A\b|\s+ADDITIONAL\s+CONDITIONS|\s*[—–]\s*\d+\s*ORIGINALS?\b|\s+TRAILER\b|\*\*\s*END\s*\*\*/i;
 const LC_CJK_RX=/[\u3040-\u30ff\u4e00-\u9fff]/;
 function _lcStripNotes(v){   // AI 要約に付いた日本語の注記 「（枚数記載なし）」等を除去
-  return String(v||'').replace(/[（(][^（()）]*[\u3040-\u30ff\u4e00-\u9fff][^（()）]*[）)]/g,' ').replace(/\s+/g,' ').trim();
+  return String(v||'').replace(/[（(][^（()）]*[\u3040-\u30ff\u4e00-\u9fff][^（()）]*[）)]/g,' ')
+    .replace(/[■□●○◆◇▪▫▶►★☆※]/g,' ')   // v4.6: PDF 復元時に混入した記号 (書類に印字しない)
+    .replace(/\s+/g,' ').trim();
 }
 function lcStatement(text){      // 証明文言 (大文字・句点1つ) / 見つからなければ ''
   const t=_lcStripNotes(text);
@@ -2387,9 +2392,17 @@ function lcStatement(text){      // 証明文言 (大文字・句点1つ) / 見�
   v=v.replace(/[\s.;:,]+$/,'').trim();
   return v?v.toUpperCase()+'.':'';
 }
+function _lcRawOriginal(raw){   // v4.5: rawText が LC 原文か (D-01 の AI 応答 JSON の先頭4000字 / 日本語要約 は原文ではない)
+  const t=String(raw||'');
+  if(!t.trim()) return '';
+  if(/^\s*[\[{]/.test(t)||/"(?:lcNo|docs46A|contractNo|applicant|addCond47A)"\s*:/.test(t)) return '';
+  return t.replace(/^.*\*\s*\*\s*\*.*$/gm,' ')                 // SWIFT 印刷のページ見出し
+          .replace(/-{2,}\s*Page\s*\d+\s*-{2,}/gi,' ')          // 「--- Page 6 ---」
+          .replace(/^\s*={2,}.*={2,}\s*$/gm,' ')                  // 「=== ファイル名 ===」
+          .replace(/-\s*CONTINUE\s*-/gi,' ');
+}
 function lcRawDocItems(raw){     // rawText の 46A を項目単位に分解 (原文でない項目は除外)
-  let t=String(raw||''); if(!t) return [];
-  t=t.replace(/^.*\*\s*\*\s*\*.*$/gm,' ').replace(/-\s*CONTINUE\s*-/gi,' ');   // SWIFT 印刷のページ見出し
+  const t=_lcRawOriginal(raw); if(!t) return [];
   const st=t.search(/:?\s*46A\b|DOCUMENTS\s+REQUIRED/i);
   let sec=st>=0?t.slice(st):t;
   const en=sec.slice(6).search(/:?\s*47A\b|ADDITIONAL\s+CONDITIONS/i);
@@ -2417,7 +2430,7 @@ function lcFreeTime47A(text){    // 47A の Free Time 条件 → {kind,text,raw,
   return null;
 }
 function lcRaw47A(raw){        // rawText の 47A 区間 (原文のときのみ)
-  let t=String(raw||'').replace(/^.*\*\s*\*\s*\*.*$/gm,' ');
+  let t=_lcRawOriginal(raw); if(!t) return '';
   const st=t.search(/:?\s*47A\b|ADDITIONAL\s+CONDITIONS/i); if(st<0) return '';
   t=t.slice(st);
   const en=t.slice(6).search(/:?\s*71[A-Z]\b|\bCHARGES\s*:|:?\s*48\b|PERIOD\s+FOR\s+PRESENTATION/i);
