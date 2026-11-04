@@ -713,8 +713,8 @@ function startTool(){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.6',
-  date:'2026-10-23',
+  version:'4.7',
+  date:'2026-11-04',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   onReady:startTool,
 });
@@ -917,7 +917,7 @@ async function loadInvoice(ivOverride){
                `cr49f_etd,cr49f_eta,crcf9_bl_etd,crcf9_bl_eta,`+
                `cr49f_bl_number,crcf9_bl_pol_text,crcf9_delivery_location,`+
                `_cr49f_sale_contract_id_value,_cr49f_carrier_id_value,`+
-               `_cr49f_region_japan_id_value,_cr49f_carrier_cost_id_value`+
+               `_cr49f_region_japan_id_value,_cr49f_carrier_cost_id_value,crcf9_bl_exchange_rate`+   // v4.7: JPY 契約の運賃換算
       `&$expand=cr49f_carrier_id($select=crcf9_carrier)&$top=1`
     );
     if(!bkgRes.value||bkgRes.value.length===0){
@@ -4741,7 +4741,7 @@ async function searchInvoice(){
     const bkgRes=await dvGet(
       `cr49f_bookings?$filter=cr49f_invoice_no eq '${invNo}'`+
       `&$select=cr49f_bookingid,cr49f_booking_no,cr49f_bl_number,cr49f_main_ship_name,cr49f_etd,cr49f_eta,`+
-      `cr49f_invoice_no,_cr49f_sale_contract_id_value,_cr49f_carrier_cost_id_value,_cr49f_region_japan_id_value,crcf9_delivery_location`
+      `cr49f_invoice_no,_cr49f_sale_contract_id_value,_cr49f_carrier_cost_id_value,_cr49f_region_japan_id_value,crcf9_delivery_location,crcf9_bl_exchange_rate`   // v4.7
     );
     if(!bkgRes.value||!bkgRes.value.length) throw new Error(`Invoice No. "${invNo}" のブッキングが見つかりません`);
     S.booking=bkgRes.value[0];
@@ -4869,15 +4869,31 @@ function computeTotals(items){
   const cifTotal=items.reduce((s,i)=>s+i.cifAmount,0);
   const containerCount=S.containers.length;
   const costPerVan=S.carrierCost?(S.carrierCost.crcf9_cost_per_van_usd||0):0;
-  const freight=Math.round(costPerVan*containerCount*100)/100;
+  const freightUsd=Math.round(costPerVan*containerCount*100)/100;
+  // v4.7: JPY 契約は運賃 (USD) を B/L 為替レートで円換算し、FREIGHT・INSURANCE・FOB をすべて円で計算する
+  const isJpy=items.some(i=>i.isJpy);
+  const fx=Number(S.booking&&S.booking.crcf9_bl_exchange_rate)||0;
+  const fxMissing=isJpy&&!(fx>0);
+  const freight=isJpy?(fxMissing?null:Math.round(freightUsd*fx)):freightUsd;
   const terms=(S.saleContract?.cr49f_terms_conditions||'').toUpperCase().trim();
   const isCIF=terms.startsWith('CIF');
   const isCFR=terms.startsWith('CFR')||terms.startsWith('C&F');
   const insurance=isCIF?Math.round(cifTotal*INSURANCE_RATE):0;
-  const fob=Math.round((cifTotal-freight-insurance)*100)/100;
+  const fob=freight==null?null:(isJpy?Math.round(cifTotal-freight-insurance):Math.round((cifTotal-freight-insurance)*100)/100);
   const totalBales=items.reduce((s,i)=>s+i.bales,0);
   const totalWeightMt=Math.round(items.reduce((s,i)=>s+i.weightMt,0)*100)/100;
-  return{cifTotal,freight,insurance,fob,totalBales,totalWeightMt,containerCount,isCIF,isCFR};
+  return{cifTotal,freight,insurance,fob,totalBales,totalWeightMt,containerCount,isCIF,isCFR,isJpy,fx,fxMissing,freightUsd};
+}
+/* v4.7: 金額表記 — USD 契約は従来どおり / JPY 契約は「JPY 1,234」(小数なし)。換算不可は「—」 */
+function fmtMoney(v,t,isIns){
+  if(v==null) return (t.isJpy?'JPY ':'US$ ')+'—';
+  if(t.isJpy) return 'JPY '+fmtNum(v,0);
+  return 'US$ '+(isIns?v:fmtNum(v));
+}
+function _fxAlert(t){   // 為替レート未入力の警告 (同じ Invoice では1回だけ)
+  if(!t.fxMissing||S._fxAlerted===S.invoiceNo) return;
+  S._fxAlerted=S.invoiceNo;
+  alert('⚠ JPY 契約ですが、COMPASS ブッキングの B/L 為替レート (crcf9_bl_exchange_rate) が未入力のため、FREIGHT (USD '+fmtNum(t.freightUsd)+') を円換算できません。\nInvoice の FREIGHT・FOB は「—」で表示しています。COMPASS に B/L 為替レートを入力してから再生成してください。');
 }
 
 // ── Invoice ──────────────────────────────────────────
@@ -4925,22 +4941,25 @@ function renderInvoice(){
     if(parts.length) body += T(27.8, totalY+40, 7.2, parts.join('\n'), {w:260, autoWrap:true});
   }
   if(S.showFreight){
+  _fxAlert(t);
+  // v4.7: 金額欄 — USD は従来の座標、JPY は桁数が増えるため右揃え (右端 = 区切り線の端 586.7pt)
+  const MV=(x,y,v,isIns)=>t.isJpy?T(440.0,y,8.6,fmtMoney(v,t,isIns),{align:'right',w:146.7}):T(x,y,8.6,fmtMoney(v,t,isIns));
   if(t.isCIF){
     // CIF: FREIGHT + INSURANCE PREMIUM + FOB (3줄)
     body += T(303.3, totalY+39.8, 8.6, 'FREIGHT');
-    body += T(528.4, totalY+39.8, 8.6, 'US$ '+fmtNum(t.freight));
+    body += MV(528.4, totalY+39.8, t.freight);
     body += T(303.3, totalY+57.0, 8.6, 'INSURANCE PREMIUM');
-    body += T(552.0, totalY+57.0, 8.6, 'US$ '+t.insurance);
+    body += MV(552.0, totalY+57.0, t.insurance, true);
     body += LN(299.7, totalY+73.7, 287.04, 1.44);
     body += T(303.3, totalY+75.7, 8.6, 'FOB(FREE ON BOARD)');
-    body += T(523.4, totalY+75.7, 8.6, 'US$ '+fmtNum(t.fob));
+    body += MV(523.4, totalY+75.7, t.fob);
   } else {
     // CFR/FOB: FREIGHT + FOB (2줄, 보험료 없음)
     body += T(303.3, totalY+39.8, 8.6, 'FREIGHT');
-    body += T(528.4, totalY+39.8, 8.6, 'US$ '+fmtNum(t.freight));
+    body += MV(528.4, totalY+39.8, t.freight);
     body += LN(299.7, totalY+55.5, 287.04, 1.44);
     body += T(303.3, totalY+57.5, 8.6, 'FOB(FREE ON BOARD)');
-    body += T(523.4, totalY+57.5, 8.6, 'US$ '+fmtNum(t.fob));
+    body += MV(523.4, totalY+57.5, t.fob);
   }
   } // end if(S.showFreight)
   body += T(372.9, 736.8, 8.6, 'LEENEAR CORPORATION');
@@ -5424,13 +5443,13 @@ function downloadExcel(){
     ['L/C No.',si?.cr49f_lc_no||''],
     ['Shipping Mark',si?.crcf9_shipping_mark||'NO MARK'],
     [],
-    ['品目','Bales','Weight(MT)','Unit Price(US$/MT)','CIF Amount(US$)'],
+    ['品目','Bales','Weight(MT)',t.isJpy?'Unit Price(JPY/MT)':'Unit Price(US$/MT)',t.isJpy?'CIF Amount(JPY)':'CIF Amount(US$)'],   // v4.7
     ...items.map(it=>[it.productName,it.bales,+it.weightMt.toFixed(2),it.price,+it.cifAmount.toFixed(2)]),
     ['TOTAL',t.totalBales,+t.totalWeightMt.toFixed(2),'',+t.cifTotal.toFixed(2)],
     [],
-    ['FREIGHT',`US$ ${fmtNum(t.freight)}`],
-    ['INSURANCE PREMIUM',`US$ ${t.insurance}`],
-    ['FOB(FREE ON BOARD)',`US$ ${fmtNum(t.fob)}`],
+    ['FREIGHT',fmtMoney(t.freight,t)],
+    ['INSURANCE PREMIUM',fmtMoney(t.insurance,t,true)],
+    ['FOB(FREE ON BOARD)',fmtMoney(t.fob,t)],
   ];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ivRows),'Invoice');
 
