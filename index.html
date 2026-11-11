@@ -459,6 +459,7 @@ input,select{font-family:inherit;}
     <div class="preview-col">
       <div id="no45Warn" class="no45-warn no-print" style="display:none"></div>
       <div id="siXxWarn" class="no45-warn no-print" style="display:none"></div>
+<div id="nameWarn" class="no45-warn no-print" style="display:none"></div>
       <div id="allDocActions" style="display:none;padding:0 0 10px;display:flex;gap:8px;flex-wrap:wrap;">
         <button onclick="printAllDocs()" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">🖨 全て印刷 (IV+PL+SI)</button>
         <button onclick="downloadExcel()" style="background:#22863a;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">📊 Excel ダウンロード</button>
@@ -604,6 +605,7 @@ input,select{font-family:inherit;}
   <div class="panel" id="panel-ivpl-fd">
     <div class="ivpl-shared-note">↔ 通関書類タブと同一データを共有。通関書類タブで Invoice No. を検索すると使用できます。</div>
     <div id="no45WarnFD" class="no45-warn no-print" style="display:none"></div>
+<div id="nameWarnFD" class="no45-warn no-print" style="display:none"></div>
     <div id="ivpl-fd-actions" style="display:none">
       <div class="doc-panel" style="max-width:500px;margin-bottom:14px;">
         <div class="doc-panel-title">IV &amp; PL — S/I 選択</div>
@@ -713,8 +715,8 @@ function startTool(){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.7',
-  date:'2026-11-04',
+  version:'4.8',
+  date:'2026-11-10',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   onReady:startTool,
 });
@@ -1176,7 +1178,7 @@ function hideDataCards(){
     const el=document.getElementById(id);
     if(el) el.style.display='none';
   });
-  ['no45Warn','no45WarnFD','siXxWarn'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  ['no45Warn','no45WarnFD','siXxWarn','nameWarn','nameWarnFD'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
 }
 
 function renderDataCard(){
@@ -1701,7 +1703,7 @@ function buildAll(){
 
   if(S.lcJson) runLcVerify();
   const _pnMissing=getProductNames().length===0;
-  alert('全書類を生成しました！各タブで確認・印刷できます。'+_lcWarnText()+_raWarnText()+(_pnMissing?'\n\n⚠ COMPASS S/I に品名が見つかりません。書類の品名欄に警告を表示しています。COMPASS の S/I 品名を確認してください。':''));
+  alert('全書類を生成しました！各タブで確認・印刷できます。'+_lcWarnText()+_raWarnText()+_nameWarnText()+(_pnMissing?'\n\n⚠ COMPASS S/I に品名が見つかりません。書類の品名欄に警告を表示しています。COMPASS の S/I 品名を確認してください。':''));
 }
 
 /* N/A パネル表示ヘルパー */
@@ -3377,9 +3379,18 @@ function getShippedDetails(){
      ② 空なら、他S/Iの同一 sale_detail の品名で補完 (nameMap)
    → どの書類でも同じ品名が出る。基本文言(WASTE PAPER RECYCLING 等)での黙示的代替は行わない。
 ══════════════════════════════════════ */
+/* v4.8: 品名は「sale_detail 1件に1つ」。COMPASS 画面で見え・修正できる S/I① を基準とし、S/I 番号順で補完する。
+   (NKO2611-21: S/I① を修正しても S/I② の品名が古いまま残り、Invoice に古い品名が出た → S/I ごとの品名は使わない) */
+function _siDetailCachesBySino(){
+  const order=[...(S.siList||[])].sort((a,b)=>(a.crcf9_sino||9)-(b.crcf9_sino||9));
+  const seen=new Set(), out=[];
+  order.forEach(si=>{ const id=si.cr49f_s_iid; if(id&&S.siDetailCache&&S.siDetailCache[id]){ seen.add(id); out.push({sino:si.crcf9_sino,cache:S.siDetailCache[id]}); } });
+  Object.keys(S.siDetailCache||{}).forEach(id=>{ if(!seen.has(id)) out.push({sino:null,cache:S.siDetailCache[id]}); });
+  return out;
+}
 function buildProductNameMap(){
   const nameMap={};
-  for(const cache of Object.values(S.siDetailCache||{})){
+  for(const {cache} of _siDetailCachesBySino()){
     for(const d of (cache||[])){
       const sdId=d['_crcf9_sale_detail_id_value']||d.crcf9_sale_detail_id;
       if(sdId&&d.crcf9_productname&&!nameMap[sdId]) nameMap[sdId]=d.crcf9_productname;
@@ -3387,6 +3398,34 @@ function buildProductNameMap(){
   }
   return nameMap;
 }
+function getProductNameConflicts(){   // 同じ sale_detail で S/I ごとに品名が異なるもの
+  const by={};
+  for(const {sino,cache} of _siDetailCachesBySino()){
+    for(const d of (cache||[])){
+      const sdId=d['_crcf9_sale_detail_id_value']||d.crcf9_sale_detail_id;
+      const n=String(d.crcf9_productname||'').trim();
+      if(!sdId||!n) continue;
+      (by[sdId]=by[sdId]||[]).push({sino,name:n});
+    }
+  }
+  return Object.values(by).filter(v=>new Set(v.map(x=>x.name.replace(/\s+/g,' ').toUpperCase())).size>1);
+}
+function _nameWarnLines(){
+  const sn=n=>n?'S/I'+'①②③④'.charAt(n-1):'S/I';
+  return getProductNameConflicts().map(v=>{
+    const base=v[0];
+    return '⚠ S/I ごとに品名が異なります — '+sn(base.sino)+' の品名で作成しました: 「'+base.name+'」 / '
+      +v.slice(1).filter(x=>x.name!==base.name).map(x=>sn(x.sino)+' 「'+x.name+'」').join(' / ')+'  (COMPASS の S/I 品目を確認してください)';
+  });
+}
+function updateNameWarn(){
+  const lines=_nameWarnLines();
+  ['nameWarn','nameWarnFD'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.innerHTML=lines.map(_escH).join('<br>'); el.style.display=lines.length?'block':'none';
+  });
+}
+function _nameWarnText(){ const l=_nameWarnLines(); return l.length?'\n\n'+l.join('\n'):''; }
 
 function getProductNames(siId){
   const nameMap=buildProductNameMap();
@@ -3406,7 +3445,7 @@ function getProductNames(siId){
   for(const d of own){
     const sdId=d['_crcf9_sale_detail_id_value']||d.crcf9_sale_detail_id;
     if(shippedIds.size>0&&!(sdId&&shippedIds.has(sdId))) continue;
-    add(d.crcf9_productname||nameMap[sdId]);
+    add(nameMap[sdId]||d.crcf9_productname);   // v4.8: S/I① 基準
   }
   if(names.length) return names;
   // ② 選択S/Iに該当detailがない場合: 船積済み sale_detail を全S/Iの品名で補完
@@ -4839,7 +4878,7 @@ function aggregateItems(siId){
     const price=isJpy?priceYen*1000:priceUsd;
     return{
       saleDetailId:sdId,
-      productName:d.crcf9_productname||nameMap[sdId]||'',
+      productName:nameMap[sdId]||d.crcf9_productname||'',   // v4.8: S/I① 基準
       hsCode:d.crcf9_hs_code||'',
       price, isJpy, bales:agg.bales, weightMt,
       cifAmount:Math.round(weightMt*price*100)/100,
@@ -4899,6 +4938,7 @@ function _fxAlert(t){   // 為替レート未入力の警告 (同じ Invoice で
 // ── Invoice ──────────────────────────────────────────
 function renderInvoice(){
   updateNo45Warn(); // v3.41
+  updateNameWarn(); // v4.8
   const si = currentSi(S.ivSino);
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
@@ -5092,7 +5132,7 @@ function renderSI(){
   const siDetails = S.siDetailCache[si.cr49f_s_iid] || [];
   const prodItems = items.length > 0
     ? items.map(i => ({productName: i.productName, hsCode: i.hsCode}))
-    : siDetails.map(d => ({productName: d.crcf9_productname || '', hsCode: d.crcf9_hs_code || ''}));
+    : siDetails.map(d => ({productName: buildProductNameMap()[d['_crcf9_sale_detail_id_value']||d.crcf9_sale_detail_id] || d.crcf9_productname || '', hsCode: d.crcf9_hs_code || ''}));   // v4.8
   if (bl1.includes('XX')){
     descBlock += substituteBlText1(bl1, t.totalBales, t.totalWeightMt*1000,
       S.containers.reduce((s,c)=>s+(c.crcf9_g_w||0),0)) + '\n\n';
@@ -5254,7 +5294,7 @@ function itemNameForContainer(c){
   const detail = siDetails.find(d =>
     (d['_crcf9_sale_detail_id_value'] || d.crcf9_sale_detail_id) === key
   );
-  return detail ? (detail.crcf9_productname || '') : '';
+  return detail ? (buildProductNameMap()[key] || detail.crcf9_productname || '') : '';   // v4.8: S/I① 基準
 }
 
 function buildDocWrap(which, pageBodies){
@@ -5417,7 +5457,7 @@ function downloadExcel(){
   const getDesc=(c)=>{
     const allDet=Object.values(S.siDetailCache).flat();
     const d=allDet.find(dd=>dd._crcf9_sale_detail_id_value===c._crcf9_sale_detail_id_value);
-    return d?.crcf9_productname||items[0]?.productName||'—';
+    return buildProductNameMap()[c._crcf9_sale_detail_id_value]||d?.crcf9_productname||items[0]?.productName||'—';   // v4.8
   };
 
   const wb=XLSX.utils.book_new();
