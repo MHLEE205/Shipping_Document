@@ -350,6 +350,8 @@ input,select{font-family:inherit;}
     padding:0!important;margin:0!important;
     break-after:page;page-break-after:always;break-inside:avoid;}
   body[data-print="cert"] .cert-wrap:last-child{break-after:avoid;page-break-after:avoid;}
+  /* v4.9: 後ろに別の証明書が続かない cert-wrap は改ページしない (Bene パネル末尾の R.A. 用非表示要素で白紙2枚目が出ていた — v4.2 の退行) */
+  body[data-print="cert"] .cert-wrap:not(:has(~ .cert-wrap)){break-after:avoid;page-break-after:avoid;}
   body[data-print="cert"] .cert-doc{
     display:flex;flex-direction:column;
     min-height:calc(297mm - 24mm);padding-bottom:14px;}
@@ -715,8 +717,8 @@ function startTool(){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.8',
-  date:'2026-11-10',
+  version:'4.9',
+  date:'2026-11-13',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   onReady:startTool,
 });
