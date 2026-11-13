@@ -717,7 +717,7 @@ function startTool(){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.9',
+  version:'4.10',
   date:'2026-11-13',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   onReady:startTool,
@@ -1547,7 +1547,7 @@ function buildAll(){
     updateBadge('b-esl','✓');
   } else if(S.importer === 'MEGA_SURYA'){
     // MEGA_SURYA: Bene Cert + COO + ESL 生成、Q&Q/FT は N/A
-    renderBeneCertMegaSurya();
+    const _okBeneMS=renderBeneCertMegaSurya();   // v4.10
     renderCOOMegaSurya();
     renderESLMegaSurya();
     showTab('esl');
@@ -1555,7 +1555,7 @@ function buildAll(){
     renderNAForPanel('ft-content','MEGA SURYA は Free Time Certificate 不要');
     updateBadge('b-qq','N/A');
     updateBadge('b-co','✓');
-    updateBadge('b-bene','✓');
+    updateBadge('b-bene',_okBeneMS?'✓':'⚠');
     updateBadge('b-ft','N/A');
     updateBadge('b-esl','✓');
     hideTab('mail');
@@ -2677,7 +2677,7 @@ function renderLcDrivenCerts(){
 }
 function _lcWarnText(){
   const w=(S.importer==='GENERIC')?((S._idWarn||[]).concat(S._lcCertWarn||[]))
-         :(['VAN_DIEM','XUAN_MAI'].includes(S.importer)?(S._beneSrcWarn||[]):[]);   // v4.4
+         :(['VAN_DIEM','XUAN_MAI','MEGA_SURYA'].includes(S.importer)?(S._beneSrcWarn||[]):[]);   // v4.4 / v4.10 MEGA SURYA
   return w.length?('\n\n⚠ '+w.join('\n⚠ ')):'';
 }
 
@@ -3470,6 +3470,30 @@ function getProductText(sep,plain){
 /* ══════════════════════════════════════
    v1.32: Beneficiary's Certificate (MEGA SURYA)
 ══════════════════════════════════════ */
+/* v4.10: MEGA SURYA の Bene 文言 — LC (Free Time: 46A / 47A の受益者証明可の条項 + 46A の Bene 項目) → COMPASS → 無し(警告)
+   MI77226000244 (2026-11) で 46A 4 に「書類直送証明」が追加されたため、LC の Bene 文言をすべて載せる方式に変更 */
+function getMegaSuryaBeneStatements(){
+  S._beneSrcWarn=[];
+  const warn=m=>{ if(S._beneSrcWarn.indexOf(m)<0) S._beneSrcWarn.push(m); };
+  const r=getLcCertRequirements();
+  (r.warn||[]).forEach(warn);
+  const items=[];
+  const compass=_stripDeclarePrefix(S.beneCertText||'');
+  if(r.freeTime&&r.freeTime.text){
+    if(r.freeTime.src==='LC要約') warn('Free Time 文言を LC JSON の要約から作成しました — LC 原文と照合してください。');
+    if(compass&&_normStmt(compass)!==_normStmt(r.freeTime.text)) warn('COMPASS S/I の Bene Cert 文言は LC と異なるため、LC の文言を使用しました。');
+    items.push(r.freeTime.text);
+  }
+  (r.bene||[]).forEach(b=>{ if(b.text&&items.indexOf(b.text)<0) items.push(b.text); });
+  if(!items.length&&compass) items.push(compass);
+  let msg='';
+  if(!items.length){
+    msg=r.loaded?'LC JSON (46A / 47A) から Beneficiary\'s Certificate の文言を取得できず、COMPASS S/I の Bene Cert 欄も空です。書類を生成していません。'
+               :'LC JSON 未読込 — Bene 文言を判定できません (COMPASS S/I の Bene Cert 欄も空)。LC JSON を読込んでから再生成してください。';
+    warn(msg);
+  }
+  return {items,msg};
+}
 function renderBeneCertMegaSurya(){
   const bk=S.booking;
   const invoiceNo=bk.cr49f_invoice_no;
@@ -3509,15 +3533,23 @@ function renderBeneCertMegaSurya(){
       <span class="cert-item-val">${h}</span>
     </div>`).join('');
 
-  const beneDeclare=S.beneCertText||
-    'MINIMUM 14 DAYS FREE TIME DEMMURAGE AND DETENTION (COMBINED) AT DESTINATION PORT';
+  // v4.10: LC の Bene 文言 (Free Time + 46A の Bene 項目) をすべて記載。固定文言は廃止
+  const _st=getMegaSuryaBeneStatements();
+  if(!_st.items.length){
+    document.getElementById('doc-bene').innerHTML=`<div class="na-panel" style="color:#c00;font-weight:700;">⚠ ${_escH(_st.msg)}</div>`;
+    return false;
+  }
+  const beneDeclare=_st.items.length===1?_escH(_st.items[0]):_st.items.map((t,n)=>(n+1)+'. '+_escH(t)).join('<br>');
+  // 「直送済み」を証明する Bene は送付後の日付が必要 → 印刷日 (それ以外は従来どおり ETD)
+  S._beneDatePrint=_st.items.some(t=>/\b(?:HAVE|HAS)\s+BEEN\s+SENT\b|\bSENT\s+DIRECTLY\b/i.test(t));
+  const beneDate=S._beneDatePrint?fmtDateEn(new Date()):etd;
   const allBlock=certBottom();
 
   document.getElementById('doc-bene').innerHTML=`
     ${certHeader()}
     <div class="cert-title">Beneficiary's Certificate</div>
     <div class="cert-meta">
-      <div>Date: &nbsp;&nbsp;&nbsp;${etd}</div>
+      <div>Date: &nbsp;&nbsp;&nbsp;${beneDate}</div>
       <div>InvoiceNo.: &nbsp;${invoiceNo}</div>
     </div>
     <div class="cert-party-block">
@@ -3555,6 +3587,7 @@ function renderBeneCertMegaSurya(){
     ${allBlock}
     <div class="cert-spacer"></div>
     ${certSig()}`;
+  return true;
 }
 
 /* ══════════════════════════════════════
@@ -4508,6 +4541,7 @@ function switchTab(name){
 }
 
 function printDocs(tab){
+  if(tab==='bene'&&S.importer==='MEGA_SURYA'&&S._beneDatePrint) renderBeneCertMegaSurya();   // v4.10: 直送証明 Bene は印刷日で再生成
   const iv=S.invoiceNo||'DOC';
   const nameMap={qq:`${iv}_QQ`,co:`${iv}_CO`,bene:`${iv}_BC`,ft:`${iv}_FT`,esl:`${iv}_ESL`,mail:`${iv}_MAIL`,md:`${iv}_MD`,form69:`${iv}_FORM6_9`};
   const origTitle=document.title;
