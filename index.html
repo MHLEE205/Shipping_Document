@@ -462,6 +462,7 @@ input,select{font-family:inherit;}
       <div id="no45Warn" class="no45-warn no-print" style="display:none"></div>
       <div id="siXxWarn" class="no45-warn no-print" style="display:none"></div>
 <div id="nameWarn" class="no45-warn no-print" style="display:none"></div>
+<div id="fxNote" class="no45-warn no-print" style="display:none"></div>
       <div id="allDocActions" style="display:none;padding:0 0 10px;display:flex;gap:8px;flex-wrap:wrap;">
         <button onclick="printAllDocs()" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">🖨 全て印刷 (IV+PL+SI)</button>
         <button onclick="downloadExcel()" style="background:#22863a;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">📊 Excel ダウンロード</button>
@@ -608,6 +609,7 @@ input,select{font-family:inherit;}
     <div class="ivpl-shared-note">↔ 通関書類タブと同一データを共有。通関書類タブで Invoice No. を検索すると使用できます。</div>
     <div id="no45WarnFD" class="no45-warn no-print" style="display:none"></div>
 <div id="nameWarnFD" class="no45-warn no-print" style="display:none"></div>
+<div id="fxNoteFD" class="no45-warn no-print" style="display:none"></div>
     <div id="ivpl-fd-actions" style="display:none">
       <div class="doc-panel" style="max-width:500px;margin-bottom:14px;">
         <div class="doc-panel-title">IV &amp; PL — S/I 選択</div>
@@ -717,8 +719,8 @@ function startTool(){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.11',
-  date:'2026-11-13',
+  version:'4.12',
+  date:'2026-11-17',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   onReady:startTool,
 });
@@ -939,9 +941,10 @@ async function loadInvoice(ivOverride){
     const ctRes=await dvGet(
       `crcf9_container_informations?$filter=_crcf9_booking_id_value eq ${bookingId}`+
       `&$select=crcf9_container_informationid,crcf9_container_no,crcf9_seal_no,crcf9_type,`+
-               `crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_g_w,crcf9_t_w,_crcf9_sale_detail_id_value`
+               `crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_g_w,crcf9_t_w,_crcf9_sale_detail_id_value,_crcf9_purchase_contract_id_value`   // v4.12
     );
     S.containers=ctRes.value||[];
+    await loadPurchaseRates();   // v4.12: 契約為替レート (B/L レート未入力時に使用)
     S.totalNwMt=S.containers.reduce((a,c)=>a+(c.crcf9_n_w||0),0)/1000;
     S.totalBales=S.containers.reduce((a,c)=>a+(c.crcf9_quantity||0),0);
     S.containerCount=S.containers.length;
@@ -1180,7 +1183,7 @@ function hideDataCards(){
     const el=document.getElementById(id);
     if(el) el.style.display='none';
   });
-  ['no45Warn','no45WarnFD','siXxWarn','nameWarn','nameWarnFD'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  ['no45Warn','no45WarnFD','siXxWarn','nameWarn','nameWarnFD','fxNote','fxNoteFD'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
 }
 
 function renderDataCard(){
@@ -4862,7 +4865,7 @@ async function searchInvoice(){
         `crcf9_port_of_discharge,crcf9_invoice_text1,crcf9_invoicetext,crcf9_bencert_text,crcf9_fd_mail,crcf9_local_agent_note`+
         `&$orderby=crcf9_sino asc`),
       dvGet(`crcf9_container_informations?$filter=_crcf9_booking_id_value eq ${S.booking.cr49f_bookingid}`+
-        `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,_crcf9_sale_detail_id_value`),
+        `&$select=crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_t_w,crcf9_g_w,_crcf9_sale_detail_id_value,_crcf9_purchase_contract_id_value`),   // v4.12
       S.booking['_cr49f_carrier_cost_id_value']
         ?dvGet(`crcf9_carrier_costs(${S.booking['_cr49f_carrier_cost_id_value']})?$select=crcf9_cost_per_van_usd,crcf9_cost_per_bl,crcf9_carrier_name`)
         :Promise.resolve(null),
@@ -4873,6 +4876,7 @@ async function searchInvoice(){
     S.siList=siRes.value||[];
     S.containers=ctRes.value||[];
     S.carrierCost=ccRes;
+    await loadPurchaseRates();   // v4.12
 
     /* Step 4b: cr49f_price_yen 個別取得 (Calculated Field — collection queryでは返らない) */
     for(const sd of S.saleDetails){
@@ -4964,7 +4968,11 @@ function computeTotals(items){
   const freightUsd=Math.round(costPerVan*containerCount*100)/100;
   // v4.7: JPY 契約は運賃 (USD) を B/L 為替レートで円換算し、FREIGHT・INSURANCE・FOB をすべて円で計算する
   const isJpy=items.some(i=>i.isJpy);
-  const fx=Number(S.booking&&S.booking.crcf9_bl_exchange_rate)||0;
+  // v4.12: B/L 為替レート → 未入力なら契約為替レート (COMPASS と同じ規則: B/L レート 0 なら契約レート)
+  const blFx=Number(S.booking&&S.booking.crcf9_bl_exchange_rate)||0;
+  const cfx=_contractFx();
+  const fx=blFx>0?blFx:cfx.rate;
+  const fxSrc=blFx>0?'BL':(cfx.rate>0?'CONTRACT':'');
   const fxMissing=isJpy&&!(fx>0);
   const freight=isJpy?(fxMissing?null:Math.round(freightUsd*fx)):freightUsd;
   const terms=(S.saleContract?.cr49f_terms_conditions||'').toUpperCase().trim();
@@ -4974,7 +4982,30 @@ function computeTotals(items){
   const fob=freight==null?null:(isJpy?Math.round(cifTotal-freight-insurance):Math.round((cifTotal-freight-insurance)*100)/100);
   const totalBales=items.reduce((s,i)=>s+i.bales,0);
   const totalWeightMt=Math.round(items.reduce((s,i)=>s+i.weightMt,0)*100)/100;
-  return{cifTotal,freight,insurance,fob,totalBales,totalWeightMt,containerCount,isCIF,isCFR,isJpy,fx,fxMissing,freightUsd};
+  return{cifTotal,freight,insurance,fob,totalBales,totalWeightMt,containerCount,isCIF,isCFR,isJpy,fx,fxMissing,freightUsd,fxSrc,fxMixed:cfx.mixed,fxRates:cfx.rates};
+}
+/* v4.12: 契約為替レート — コンテナの購入契約 (cr49f_purchase_contracts.cr49f_exchange_rate) から取得 */
+async function loadPurchaseRates(){
+  S.purchaseRates={};
+  const ids=[...new Set((S.containers||[]).map(c=>c._crcf9_purchase_contract_id_value).filter(Boolean))];
+  for(const id of ids){
+    try{ const r=await dvGet(`cr49f_purchase_contracts(${id})?$select=cr49f_exchange_rate`); S.purchaseRates[id]=Number(r&&r.cr49f_exchange_rate)||0; }
+    catch(e){ S.purchaseRates[id]=0; }
+  }
+}
+function _contractFx(){   // コンテナ数が最も多い契約レート / 複数あれば mixed
+  const cnt={};
+  (S.containers||[]).forEach(c=>{ const r=(S.purchaseRates||{})[c._crcf9_purchase_contract_id_value]; if(r>0) cnt[r]=(cnt[r]||0)+1; });
+  const rates=Object.entries(cnt).map(([r,n])=>({rate:Number(r),n})).sort((a,b)=>b.n-a.n||b.rate-a.rate);
+  return {rate:rates.length?rates[0].rate:0, mixed:rates.length>1, rates};
+}
+function updateFxNote(t){   // 画面のみ (印刷しない)
+  let msg='';
+  if(t&&t.isJpy&&t.fxSrc==='CONTRACT'){
+    msg='ℹ B/L 為替レート未入力のため、契約為替レート '+t.fx+' で FREIGHT を円換算しています (B/L レートが入力されると自動で B/L レートを使用します)';
+    if(t.fxMixed) msg='⚠ '+msg.slice(2)+' — 契約レートが複数あります: '+t.fxRates.map(x=>x.rate+' ('+x.n+'本)').join(' / ')+' → コンテナ数が最も多いレートを使用';
+  }
+  ['fxNote','fxNoteFD'].forEach(id=>{ const el=document.getElementById(id); if(!el) return; el.textContent=msg; el.style.display=msg?'block':'none'; });
 }
 /* v4.7: 金額表記 — USD 契約は従来どおり / JPY 契約は「JPY 1,234」(小数なし)。換算不可は「—」 */
 function fmtMoney(v,t,isIns){
@@ -4985,7 +5016,7 @@ function fmtMoney(v,t,isIns){
 function _fxAlert(t){   // 為替レート未入力の警告 (同じ Invoice では1回だけ)
   if(!t.fxMissing||S._fxAlerted===S.invoiceNo) return;
   S._fxAlerted=S.invoiceNo;
-  alert('⚠ JPY 契約ですが、COMPASS ブッキングの B/L 為替レート (crcf9_bl_exchange_rate) が未入力のため、FREIGHT (USD '+fmtNum(t.freightUsd)+') を円換算できません。\nInvoice の FREIGHT・FOB は「—」で表示しています。COMPASS に B/L 為替レートを入力してから再生成してください。');
+  alert('⚠ JPY 契約ですが、COMPASS ブッキングの B/L 為替レート (crcf9_bl_exchange_rate) も契約為替レート (購入契約) も未入力のため、FREIGHT (USD '+fmtNum(t.freightUsd)+') を円換算できません。\nInvoice の FREIGHT・FOB は「—」で表示しています。COMPASS に為替レートを入力してから再生成してください。');
 }
 
 // ── Invoice ──────────────────────────────────────────
@@ -4995,6 +5026,7 @@ function renderInvoice(){
   const si = currentSi(S.ivSino);
   const items = aggregateItems(si.cr49f_s_iid);
   const t = computeTotals(items);
+  updateFxNote(t);   // v4.12
   const b = S.booking, sc = S.saleContract;
   const ROWH = 20.09, ROW0 = 299.94;  // 헤더행 27pt (COMPASS 실측) + headerTopY 272.94
 
