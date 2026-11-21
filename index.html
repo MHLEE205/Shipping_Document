@@ -716,14 +716,29 @@ function startTool(){
   if(badge) badge.textContent='[—]';
   setTimeout(function(){initBuyerSelector();},200);
 }
+/* v4.13: 自動モード (?auto=1 · HANNYU_TOOL の 「通関書類送付」 が同じ出所の画面の中で開いた時だけ) — それ以外は今までと同じ LEENAI.init */
+const D03_AUTO=(function(){
+  try{
+    if(new URLSearchParams(location.search).get('auto')!=='1') return null;
+    if(window.parent===window) return null;
+    const p=window.parent;                       // 違う出所なら ここで例外 → 自動モードにしない
+    if(!p.LEENAI||!p.LEENAI.auth||!p.LEENAI.user) return null;
+    return {parent:p};
+  }catch(e){ return null; }
+})();
+if(D03_AUTO){
+  window.LEENAI=D03_AUTO.parent.LEENAI;          // 押した担当者のログインをそのまま使う (COMPASS は読むだけ)
+  d03AutoBoot();
+}else{
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.12',
-  date:'2026-11-17',
+  version:'4.13',
+  date:'2026-11-21',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   onReady:startTool,
 });
+}
 
 function updateTabHighlights(){
   const docTabs=['qq','co','bene','ft','esl','mail','bene-mail','md','form69'];
@@ -5806,6 +5821,188 @@ function renderIvSinoGrid2(){
   }).join('');
 }
 
+
+/* ══════════════════════════════════════════════════════
+   v4.13: 自動モード (通関書類自動送付 · 決定 #359 · #302 A)
+   - 動く条件: URL ?auto=1 + 同じ出所 (mhlee205.github.io) の HANNYU_TOOL の画面の中 (iframe)。それ以外は何もしない (普通の D-03 は変化なし)
+   - ログイン = 親の画面 (HANNYU_TOOL) の LEENAI (押した担当者) · COMPASS は GET だけ · 書き込み 0
+   - 選ぶ値 (#303 · #306): IV·PL S/I = 一番後ろの番号 (Notify 仲介・物流 · XX の残る S/I は除く) / SI = S/I① / FOB 運賃 = FOB 契約だけ OFF /
+     POD = 候補 1 つならそれ · 2〜3 個ならブッキング仕向地の文字が入った候補 / B/L 形態 = TOOL から (#338 · 担当者が選ぶ)
+   - 印刷の窓なし: 「全て印刷 (IV+PL+SI)」 と同じページ (.a4-page · 印刷と同じ 0.97 倍 · 上中央) を画像にして PDF (html2canvas + jsPDF · 自動モードの時だけ読む)
+   - 結果 = window.D03AUTO.run({...}) → {pdf_b64, picks, warnings, info} (TOOL が確認窓に出す)
+══════════════════════════════════════════════════════ */
+const D03A_LIBS=['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+                 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
+const D03A_INT=/YAMAHATSU|LOGISTIC|EXPRESS|FORWARD|SHIPPING|AGENC/i;      // Notify が仲介・物流 (#306)
+const D03A_BANK=/\bBANK\b|TO\s+(THE\s+)?ORDER|NGAN\s*HANG/i;
+const D03A_DEPOSIT=/DEPOSIT\s*NUMBER\s*:?\s*X{2,}/i;                       // #343: ベトナム S/I のこの 1 行だけ XX 可
+function d03aNorm(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function d03aCompany(s){
+  const first=String(s||'').trim().split('\n')[0].toUpperCase();
+  return d03aNorm(first.replace(/(CO\.?,?\s*LTD|CORPORATION|CORP\.?|LIMITED|INC\.?|TBK|PT\.?|JSC|COMPANY)/g,'')).slice(0,18);
+}
+function d03aHasXx(si){ return /XX/.test((si.crcf9_po_vo||'')+(si.crcf9_notify_party||'')); }
+function d03aPickIvSi(L){
+  if(!L.length) return {v:null, why:'S/I がありません', red:true};
+  const c=L.filter(s=>!d03aHasXx(s)).filter(s=>!D03A_INT.test(s.crcf9_notify_party||''));
+  if(!c.length) return {v:Math.max(...L.map(s=>s.crcf9_sino||1)), why:'残る S/I がありません (XX · 仲介・物流の Notify を除くと 0)', red:true};
+  const v=Math.max(...c.map(s=>s.crcf9_sino||1));
+  const cons=new Set(L.filter(s=>!D03A_BANK.test(s.crcf9_consignee||'')).map(s=>d03aCompany(s.crcf9_consignee)).filter(Boolean));
+  if(L.length>=3&&cons.size>=2) return {v, why:'三国間貿易の疑い (S/I 3 つ以上 · 銀行以外の Consignee 2 社以上)', red:true};
+  return {v, why:'最終番号 (S/I'+'①②③④'[v-1]+')'};
+}
+function d03aPickSiSi(L){
+  const s1=L.find(s=>(s.crcf9_sino||1)===1)||L[0];
+  if(!s1) return {v:null, why:'S/I がありません', red:true};
+  return {v:s1.crcf9_sino||1, why:'S/I①'};
+}
+function d03aPickPod(si,regionPod){
+  const c=[1,2,3].map(n=>[n,si['crcf9_place_of_delivery_'+n]]).filter(x=>x[1]);
+  if(!c.length) return {v:[1], why:'POD 候補がありません', red:true};
+  if(c.length===1) return {v:[c[0][0]], why:'候補 1 つ'};
+  const rp=d03aNorm(regionPod);
+  const hit=c.filter(x=>rp&&d03aNorm(x[1]).indexOf(rp)>=0).map(x=>x[0]);
+  if(hit.length===1) return {v:hit, why:'ブッキング仕向地と一致 (候補 '+c.length+' つ)'};
+  return {v:[c[0][0]], why:'POD 候補 '+c.length+' つ · 仕向地と一致 '+hit.length+' つ — 選んでください', red:true};
+}
+function d03aPickFreight(terms){
+  const t=String(terms||'').trim().toUpperCase();
+  if(!t) return {v:true, why:'販売条件が空です', red:true};
+  return t.indexOf('FOB')===0 ? {v:false, why:'FOB 契約 = 運賃なし'} : {v:true, why:t+' = 運賃あり'};
+}
+function d03aLoad(src){
+  return new Promise((ok,ng)=>{ const e=document.createElement('script'); e.src=src; e.onload=ok; e.onerror=()=>ng(new Error('読み込み失敗 '+src)); document.head.appendChild(e); });
+}
+async function d03aSha256(buf){
+  const h=await crypto.subtle.digest('SHA-256',buf);
+  return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function d03aB64(u8){ let s=''; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); }
+async function d03aRun(o){
+  o=o||{};
+  const iv=String(o.iv||'').trim().toUpperCase();
+  const W=[];                                     // [{red, item, text}]
+  const dialogs=[];
+  const _a=window.alert, _c=window.confirm, _p=window.print;
+  window.alert=m=>{dialogs.push(String(m));};
+  window.confirm=m=>{dialogs.push(String(m)); return true;};
+  window.print=()=>{};
+  try{
+    if(!iv) throw new Error('IV がありません');
+    document.getElementById('invoiceInput').value=iv;
+    await searchInvoice();
+    const err=document.querySelector('#searchMsg .err');
+    if(err) throw new Error(err.textContent);
+    if(!S.booking||!S.siList.length) throw new Error('COMPASS に S/I がありません');
+    await new Promise(r=>setTimeout(r,600));      // searchInvoice の後ろの読み込み (L/C など) を待つ (普通の画面で人が押すまでの間と同じ)
+    S.invoiceNo=S.booking.cr49f_invoice_no||iv;
+    let regionPod='';
+    try{
+      const b=await dvGet(`cr49f_bookings(${S.booking.cr49f_bookingid})?$select=_cr49f_region_id_value`);
+      if(b._cr49f_region_id_value){ const r=await dvGet(`cr49f_regions(${b._cr49f_region_id_value})?$select=cr49f_region,cr49f_pod`); regionPod=r.cr49f_pod||''; S._d03aRegion=r.cr49f_region||''; }
+    }catch(e){ W.push({red:false, item:'POD', text:'仕向地を読めませんでした ('+e.message+')'}); }
+    const L=S.siList.slice();
+    const avail=L.map(s=>s.crcf9_sino||1);
+    const P={};
+    P.ivSino=o.ivSino&&avail.includes(+o.ivSino)?{v:+o.ivSino, why:'担当者が選択'}:d03aPickIvSi(L);
+    P.siSino=o.siSino&&avail.includes(+o.siSino)?{v:+o.siSino, why:'担当者が選択'}:d03aPickSiSi(L);
+    const siIv=L.find(s=>(s.crcf9_sino||1)===P.ivSino.v)||L[0];
+    P.pod=Array.isArray(o.pod)&&o.pod.length?{v:o.pod.map(Number), why:'担当者が選択'}:d03aPickPod(siIv,regionPod);
+    P.freight=typeof o.freight==='boolean'?{v:o.freight, why:'担当者が選択'}:d03aPickFreight((S.saleContract||{}).cr49f_terms_conditions);
+    const bl=['original','waybill','surrender'].includes(o.bl)?o.bl:'';
+    P.bl={v:bl, why:o.blWhy||(bl?'担当者が選択':'未選択')};
+    const LBL={ivSino:'S/I (IV·PL)',siSino:'S/I (SI)',pod:'POD',freight:'FOB 運賃'};
+    ['ivSino','siSino','pod','freight'].forEach(k=>{ if(P[k].red) W.push({red:true, item:LBL[k], text:P[k].why}); });
+    if(!bl) W.push({red:true, item:'B/L', text:'B/L 形態を選んでください'+(o.blWhy?' ('+o.blWhy+')':'')});
+    const hasLc=L.some(s=>String(s.cr49f_lc_no||'').trim());
+    if(bl&&bl!=='original'&&hasLc) W.push({red:true, item:'B/L', text:'L/C 契約です — '+(bl==='waybill'?'WAY BILL':'SURRENDER')+' で良いか確認してください'});
+    // D-03 「未確定項目」 (画面の 🔲 と同じ 4 つ)
+    if(P.ivSino.v>=3||P.siSino.v>=3) W.push({red:true, item:'D-03 未確定項目', text:'三者貿易 (S/I③④)'});
+    if(S.importer==='CAS_PAPER'||/THAILAND/i.test(regionPod+' '+(S._d03aRegion||''))) W.push({red:true, item:'D-03 未確定項目', text:'タイ SHIPPING MARK'});
+    if(bl==='surrender'||bl==='waybill') W.push({red:bl==='surrender', item:'D-03 未確定項目', text:(bl==='surrender'?'SURRENDER':'WAY BILL')+' 文言 (D-03 「文言未確認」)'});
+    if(/^CI[FP]/i.test(String((S.saleContract||{}).cr49f_terms_conditions||''))) W.push({red:false, item:'D-03 未確定項目', text:'INSURANCE 最低フロア (CIF)'});
+    if(o.prevCons!=null){
+      const cur=d03aCompany(siIv.crcf9_consignee);
+      if(!o.prevCons) W.push({red:true, item:'Consignee', text:'このバイヤーの前回送付の記録がありません — Consignee を確認してください'});
+      else if(o.prevCons!==cur) W.push({red:true, item:'Consignee', text:'前回 (同じバイヤー) と Consignee の会社が違います'});
+    }
+    // 画面の値を入れて 3 書類を作る (印刷ボタンと同じ関数)
+    S.ivSino=P.ivSino.v; S.siSino=P.siSino.v;
+    S.ivPod={1:P.pod.v.includes(1),2:P.pod.v.includes(2),3:P.pod.v.includes(3)}; S.siPod={...S.ivPod};
+    S.showFreightTsukan=P.freight.v; const fc=document.getElementById('showFreightTsukanCheck'); if(fc) fc.checked=P.freight.v;
+    document.querySelectorAll('input[name="blType"]').forEach(r=>{ r.checked=(r.value===(bl||'original')); });
+    try{ renderSinoSelectors(); }catch(e){}
+    renderAllDocs();
+    // XX (S/I) — #343: DEPOSIT NUMBER: XX の 1 行だけは除く
+    const xx=findSiXxLines().filter(l=>!D03A_DEPOSIT.test(l));
+    if(xx.length) W.push({red:true, item:'S/I XX', text:'S/I に XX が残っています: '+xx.slice(0,5).join(' / ')+(xx.length>5?' 他 '+(xx.length-5)+' 行':'')});
+    dialogs.forEach(d=>{ if(/為替/.test(d)) W.push({red:true, item:'為替', text:d.replace(/\s+/g,' ').slice(0,160)}); else if(!/XX/.test(d)) W.push({red:false, item:'D-03', text:d.replace(/\s+/g,' ').slice(0,160)}); });
+    // PDF (印刷と同じページ · 0.97 倍 · 上中央)
+    if(!window.html2canvas) await d03aLoad(D03A_LIBS[0]);
+    if(!(window.jspdf&&window.jspdf.jsPDF)) await d03aLoad(D03A_LIBS[1]);
+    // 印刷 (printAllDocs) と同じく 3 書類を body の直下へ一時的に移す (画面のタブが閉じていても描ける) → 終わったら元の場所へ
+    const moved=[];
+    ['invoice','pl','si'].forEach(w=>{ const el=document.getElementById('doc-'+w); if(el){ moved.push([el,el.parentNode,el.nextSibling,el.style.display]); document.body.appendChild(el); el.style.display='block'; } });
+    const pages=[];
+    moved.forEach(m=>m[0].querySelectorAll('.a4-page').forEach(p=>pages.push(p)));
+    const restore=()=>moved.slice().reverse().forEach(m=>{   // 後ろから戻す (隣どうしの書類の順を保つ)
+       if(m[1]){ if(m[2]) m[1].insertBefore(m[0],m[2]); else m[1].appendChild(m[0]); } m[0].style.display=m[3]; });
+    if(!pages.length){ restore(); throw new Error('書類のページがありません'); }
+    const pdf=new window.jspdf.jsPDF({unit:'pt', format:'a4', compress:true});
+    const PW=595.28, PH=841.89, K=0.97;
+    try{
+      for(let i=0;i<pages.length;i++){
+        const pg=pages[i]; const sh=pg.style.boxShadow, mg=pg.style.margin;
+        pg.style.boxShadow='none'; pg.style.margin='0';
+        const cv=await window.html2canvas(pg,{scale:o.scale||2.5, backgroundColor:'#ffffff', useCORS:true, logging:false});
+        pg.style.boxShadow=sh; pg.style.margin=mg;
+        if(!cv.width||!cv.height) throw new Error('ページを描けませんでした ('+(i+1)+')');
+        if(i) pdf.addPage('a4','portrait');
+        pdf.addImage(cv.toDataURL('image/jpeg',0.88),'JPEG',PW*(1-K)/2,0,PW*K,PH*K,undefined,'FAST');
+        d03aTextLayer(pdf,pg,PW*(1-K)/2,PW*K);   // 見えない文字の層 (検索 · コピー用 · 見た目は画像のまま)
+      }
+    }finally{ restore(); }
+    pdf.setProperties({title:S.invoiceNo+'_IV_PL_SI', creator:'D-03 v4.13 自動モード · ✦ Powered by LEENAI Automation System'});
+    const buf=pdf.output('arraybuffer');
+    const u8=new Uint8Array(buf);
+    const nw=S.containers.reduce((a,c)=>a+(c.crcf9_n_w||0),0);
+    return {ok:true, version:'4.13', iv:S.invoiceNo, file:S.invoiceNo+'_IV_PL_SI.pdf', pages:pages.length, pdf_b64:d03aB64(u8), bytes:u8.length, sha256:await d03aSha256(buf),
+      picks:P, warnings:W, si_avail:avail,
+      info:{buyer_id:(S.saleContract||{})._cr49f_buyer_id_value||'', consignee:d03aCompany(siIv.crcf9_consignee), terms:(S.saleContract||{}).cr49f_terms_conditions||'',
+            lc:hasLc, region_pod:regionPod, n_ct:S.containers.length, nw_kg:nw,
+            containers:S.containers.map(c=>({ct:c.crcf9_container_no||'', seal:c.crcf9_seal_no||'', nw:c.crcf9_n_w, tw:c.crcf9_t_w, bales:c.crcf9_quantity}))}};
+  }catch(e){
+    return {ok:false, error:e.message||String(e), warnings:W};
+  }finally{
+    window.alert=_a; window.confirm=_c; window.print=_p;
+  }
+}
+/* 見えない文字の層: ページの文字を単語ごとに同じ位置へ (jsPDF の標準フォントで書ける英数字だけ · 日本語の単語は画像だけ) */
+function d03aTextLayer(pdf,pg,ox,wpt){
+  const pr=pg.getBoundingClientRect(); if(!pr.width) return;
+  const k=wpt/pr.width;
+  pdf.setFont('helvetica','normal');
+  const tw=document.createTreeWalker(pg,NodeFilter.SHOW_TEXT); let n;
+  while((n=tw.nextNode())){
+    const t=n.textContent; if(!t||!t.trim()) continue;
+    const fs=parseFloat(getComputedStyle(n.parentElement).fontSize)||10;
+    const re=/\S+/g; let m;
+    while((m=re.exec(t))){
+      const w=m[0]; if(/[^\x20-\x7E\xA0-\xFF]/.test(w)) continue;
+      const r=document.createRange(); r.setStart(n,m.index); r.setEnd(n,m.index+w.length);
+      const rc=r.getClientRects()[0]; if(!rc||!rc.width) continue;
+      pdf.setFontSize(Math.max(1,fs*k));
+      pdf.text(w, ox+(rc.left-pr.left)*k, (rc.top-pr.top+rc.height*0.8)*k, {renderingMode:'invisible', baseline:'alphabetic'});
+    }
+  }
+}
+function d03AutoBoot(){
+  const u=LEENAI.user||{};
+  S.signerName=u.email?(SIGNER_MAP[String(u.email).toLowerCase()]||'PARK'):'PARK';
+  let chain=Promise.resolve();
+  window.D03AUTO={version:'4.13', ready:Promise.resolve(true),
+    run:function(o){ const p=chain.then(()=>d03aRun(o)); chain=p.catch(()=>{}); return p; }};   // 1 件ずつ順番に
+}
 
 </script>
 </body>
