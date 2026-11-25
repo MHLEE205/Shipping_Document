@@ -86,9 +86,9 @@ const msgOf=w=>w.document.getElementById('fdDataMsg').textContent;
   console.log('\n[1] 文字の層を取り出す (PDF)');
   { const {w}=makeWin();
     const a=await w.fdDataPdfWords(fakePdfBytes(['NA2605-08','A(B)','C\\D','2026/11/20','17:05','12:30']));
-    ok('FlateDecode の中の (…) Tj を順に · 括弧 · \\ の戻し', JSON.stringify(a)===JSON.stringify(['NA2605-08','A(B)','C\\D','2026/11/20','17:**','12:30']), a);
+    ok('FlateDecode の中の (…) Tj を順に · 括弧 · \\ の戻し', JSON.stringify(a)===JSON.stringify(['NA2605-08','A(B)','C\\D','2026/11/20','17:05','12:30']), a);
     ok('画像の流れは読まない', !a.includes('FAKEIMAGE'));
-    ok('日付の後の 17:xx だけ伏せる (Bene の送信時刻)', a[4]==='17:**'&&a[5]==='12:30'); }
+    ok('v4.16: 日付の後の 17:xx も伏せない (Bene の送信時刻は Invoice ごとに固定)', a[4]==='17:05'&&a[5]==='12:30'); }
   { const {w}=makeWin();
     ok('最新 = 番号いちばん大きい', w.fdDataLatest('NA2605-08',[{name:'NA2605-08_FD_DATA.pdf'},{name:'NA2605-08_FD_DATA_3.pdf'},{name:'na2605-08_fd_data_2.PDF'},{name:'NA2605-08_FD.pdf'},{name:'NA2605-08_FD_DATA_X.pdf'}]).name==='NA2605-08_FD_DATA_3.pdf');
     ok('_FD_DATA.pdf だけ → それ', w.fdDataLatest('NA2605-08',[{name:'NA2605-08_FD_DATA.pdf'}]).name==='NA2605-08_FD_DATA.pdf');
@@ -103,8 +103,8 @@ const msgOf=w=>w.document.getElementById('fdDataMsg').textContent;
     ok('表示 「FD_DATA は保存済みです (同じ内容): …_FD_DATA.pdf」', /^FD_DATA は保存済みです \(同じ内容\): NA2605-08_FD_DATA\.pdf$/.test(msgOf(B.w))&&!hangul(msgOf(B.w)), msgOf(B.w));
     ok('フォルダの中身 1 つのまま', Object.keys(store).length===1);
     ok('最新ファイルは downloadUrl から (トークンなしで) 読む', B.calls.some(c=>c.url.startsWith('https://dl.test/')&&!c.auth));
-    const C=makeWin({store}); prepDocs(C.w,{time:'17:48'}); const r3=await C.w.fdDataAutoSave();
-    ok('Bene の送信時刻 (17 時台ランダム) だけ違う → 同じ扱い', r3.same===true&&puts(C.calls).length===0, r3);
+    const C=makeWin({store:Object.assign({},store)}); prepDocs(C.w,{time:'17:48'}); const r3=await C.w.fdDataAutoSave();
+    ok('v4.16: Bene の送信時刻 (分) が違う → 違う内容として保存 (_2 · 別の store で)', r3.ok&&!r3.same&&r3.name==='NA2605-08_FD_DATA_2.pdf'&&puts(C.calls).length===1, r3);
     const D=makeWin({store}); prepDocs(D.w,{co:' REVISED'}); const r4=await D.w.fdDataAutoSave();
     ok('中身が違う → _FD_DATA_2.pdf', r4.ok&&!r4.same&&r4.name==='NA2605-08_FD_DATA_2.pdf', r4);
     const E=makeWin({store}); prepDocs(E.w); const r5=await E.w.fdDataAutoSave();
@@ -157,8 +157,8 @@ const msgOf=w=>w.document.getElementById('fdDataMsg').textContent;
 
   console.log('\n[5] 版 · 自動モード · 画面');
   { const js=lastJs(html);
-    ok('version 4.15', /version:'4\.15'/.test(js));
-    ok('FD_DATA の creator v4.15', /creator:'D-03 v4\.15 · /.test(js));
+    ok('version 4.15 以上', /version:'4\.1[5-9]'/.test(js));
+    ok('FD_DATA の creator v4.15 以上', /creator:'D-03 v4\.1[5-9] · /.test(js));
     ok('自動モード (通関書類送付) は 4.13 のまま', /creator:'D-03 v4\.13 自動モード/.test(js)&&/window\.D03AUTO=\{version:'4\.13'/.test(js));
     ok('文字の層 (d03aTextLayer) は変えない', /pdf\.text\(w, ox\+\(rc\.left-pr\.left\)\*k, \(rc\.top-pr\.top\+rc\.height\*0\.8\)\*k, \{renderingMode:'invisible', baseline:'alphabetic'\}\);/.test(js));
     ok('ボタン追加なし (onclick の fdData は運賃チェックの 1 つだけ)', (html.match(/on\w+="[^"]*fdData/g)||[]).length===1&&/onchange="S\.showFreightFD=this\.checked;fdDataStaleCheck\(\)"/.test(html));

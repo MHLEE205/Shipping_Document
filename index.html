@@ -736,7 +736,7 @@ if(D03_AUTO){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.15',
+  version:'4.16',
   date:'2026-11-25',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   graphScopes:['Sites.ReadWrite.All'],   // v4.14: FD 文字版 (FD_DATA) を Invoice フォルダへ保存 (新規作成だけ · 上書き 0)
@@ -1964,7 +1964,7 @@ function renderBeneCert(){
   const bk=S.booking;
   const invoiceNo=bk.cr49f_invoice_no;
   const issuanceDate=fmtDateEn(getEtd(bk));
-  const blDateTime=makeEmailSentTime(bk); // 発送日時 (B/L Date + 17時台ランダム)
+  const blDateTime=makeEmailSentTime(bk); // 発送日時 (B/L Date + 17時台 · 分は Invoice 番号で固定)
   const etdStr=fmtDateEn(getEtd(bk));
   const etaStr=fmtDateEn(getEta(bk));
   const blNo=bk.cr49f_bl_number||'—';
@@ -4086,14 +4086,20 @@ function renderBeneCertMailNXM(){
 }
 
 
-/* ── 이메일 발송 일시 (B/L Date + 17~18시 랜덤) ── */
+/* ── メール発送日時 (B/L Date + 17 時台 · 分は Invoice 番号で決まる — v4.16: 同じ Invoice はいつも同じ分) ── */
 function makeEmailSentTime(bk){
   const raw=(bk.crcf9_bl_etd||bk.cr49f_etd||'').split('T')[0];
   let y,mo,d;
   if(raw){[y,mo,d]=raw.split('-').map(Number);}
   else{const t=new Date();y=t.getFullYear();mo=t.getMonth()+1;d=t.getDate();}
-  const min=Math.floor(Math.random()*60);
+  const min=emailSentMinute(bk.cr49f_invoice_no);
   return `${y}/${String(mo).padStart(2,'0')}/${String(d).padStart(2,'0')} 17:${String(min).padStart(2,'0')}`;
+}
+/* v4.16: Invoice 番号 → 0〜59 分 (FNV-1a 32bit · 前後の空白と大小文字は無視) */
+function emailSentMinute(iv){
+  const t=String(iv||'').trim().toUpperCase(); let h=0x811c9dc5;
+  for(let i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}
+  return h%60;
 }
 function renderBeneCertSimple(){
   const bk=S.booking;
@@ -6102,7 +6108,7 @@ async function fdDataAutoSave(){
       pdf.addImage(cv.toDataURL('image/jpeg',0.88),'JPEG',ox,0,w,h,undefined,'FAST');
       d03aTextLayer(pdf,pg,ox,w);
     }
-    pdf.setProperties({title:iv+'_FD_DATA', subject:'FD DATA (D-03)', creator:'D-03 v4.15 · ✦ Powered by LEENAI Automation System'});
+    pdf.setProperties({title:iv+'_FD_DATA', subject:'FD DATA (D-03)', creator:'D-03 v4.16 · ✦ Powered by LEENAI Automation System'});
     const body=pdf.output('arraybuffer');
     // v4.15 (D2): その Invoice フォルダの最新 FD_DATA と 文字の層が同じなら 保存しない (ページを開き直しても)
     const last=fdDataLatest(iv,items);
@@ -6178,8 +6184,7 @@ async function fdDataPdfWords(buf){
     const tj=/\(((?:\\[\s\S]|[^\\)])*)\)\s*Tj/g; let t;
     while((t=tj.exec(s))) words.push(t[1].replace(/\\([\\()])/g,'$1'));
   }
-  // Bene の送信時刻 (B/L Date + 17 時台ランダム · 生成のたびに変わる) は比べない
-  return words.map((w,i)=>(/^17:\d\d$/.test(w)&&/^\d{4}\/\d{2}\/\d{2}$/.test(words[i-1]||''))?'17:**':w);
+  return words;   // v4.16: Bene の送信時刻は Invoice ごとに固定 → 隠さずそのまま比べる
 }
 async function fdDataSameText(item,body){
   const url=item&&item['@microsoft.graph.downloadUrl']; if(!url) return null;
