@@ -736,7 +736,7 @@ if(D03_AUTO){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.16',
+  version:'4.17',
   date:'2026-11-25',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   graphScopes:['Sites.ReadWrite.All'],   // v4.14: FD 文字版 (FD_DATA) を Invoice フォルダへ保存 (新規作成だけ · 上書き 0)
@@ -4086,7 +4086,7 @@ function renderBeneCertMailNXM(){
 }
 
 
-/* ── メール発送日時 (B/L Date + 17 時台 · 分は Invoice 番号で決まる — v4.16: 同じ Invoice はいつも同じ分) ── */
+/* ── メール発送日時 (B/L Date + 17 時台 · 分は Invoice 番号で決まる — v4.16: 同じ Invoice はいつも同じ分 · v4.17: 17:05〜17:55) ── */
 function makeEmailSentTime(bk){
   const raw=(bk.crcf9_bl_etd||bk.cr49f_etd||'').split('T')[0];
   let y,mo,d;
@@ -4095,11 +4095,11 @@ function makeEmailSentTime(bk){
   const min=emailSentMinute(bk.cr49f_invoice_no);
   return `${y}/${String(mo).padStart(2,'0')}/${String(d).padStart(2,'0')} 17:${String(min).padStart(2,'0')}`;
 }
-/* v4.16: Invoice 番号 → 0〜59 分 (FNV-1a 32bit · 前後の空白と大小文字は無視) */
+/* v4.17: Invoice 番号 → 5〜55 分 (FNV-1a 32bit · 前後の空白と大小文字は無視 · 17:00 などのちょうどの分を避ける) */
 function emailSentMinute(iv){
   const t=String(iv||'').trim().toUpperCase(); let h=0x811c9dc5;
   for(let i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}
-  return h%60;
+  return 5+h%51;
 }
 function renderBeneCertSimple(){
   const bk=S.booking;
@@ -6108,7 +6108,7 @@ async function fdDataAutoSave(){
       pdf.addImage(cv.toDataURL('image/jpeg',0.88),'JPEG',ox,0,w,h,undefined,'FAST');
       d03aTextLayer(pdf,pg,ox,w);
     }
-    pdf.setProperties({title:iv+'_FD_DATA', subject:'FD DATA (D-03)', creator:'D-03 v4.16 · ✦ Powered by LEENAI Automation System'});
+    pdf.setProperties({title:iv+'_FD_DATA', subject:'FD DATA (D-03)', creator:'D-03 v4.17 · ✦ Powered by LEENAI Automation System'});
     const body=pdf.output('arraybuffer');
     // v4.15 (D2): その Invoice フォルダの最新 FD_DATA と 文字の層が同じなら 保存しない (ページを開き直しても)
     const last=fdDataLatest(iv,items);
