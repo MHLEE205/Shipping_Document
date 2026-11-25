@@ -554,6 +554,7 @@ input,select{font-family:inherit;}
     <div id="goPanel" style="display:none;margin-top:4px;">
       <button class="btn btn-success" onclick="buildAll()">✅ 全書類を生成 → 各タブへ</button>
       <span id="importerBadge" style="font-size:12px;font-weight:700;color:var(--warn);margin-left:10px;">[—]</span>
+      <div id="fdDataMsg" class="no-print" style="display:none;font-size:12px;margin-top:6px;"></div>
     </div>
   </div>
   <div class="panel" id="panel-qq">
@@ -733,9 +734,10 @@ if(D03_AUTO){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.13',
-  date:'2026-11-21',
+  version:'4.14',
+  date:'2026-11-25',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
+  graphScopes:['Sites.ReadWrite.All'],   // v4.14: FD 文字版 (FD_DATA) を Invoice フォルダへ保存 (新規作成だけ · 上書き 0)
   onReady:startTool,
 });
 }
@@ -1725,6 +1727,7 @@ function buildAll(){
   if(S.lcJson) runLcVerify();
   const _pnMissing=getProductNames().length===0;
   alert('全書類を生成しました！各タブで確認・印刷できます。'+_lcWarnText()+_raWarnText()+_nameWarnText()+(_pnMissing?'\n\n⚠ COMPASS S/I に品名が見つかりません。書類の品名欄に警告を表示しています。COMPASS の S/I 品名を確認してください。':''));
+  fdDataAutoSave();   // v4.14: FD 文字版を Invoice フォルダへ自動保存 (結果は 「生成」 ボタンの下に 1 行)
 }
 
 /* N/A パネル表示ヘルパー */
@@ -5409,7 +5412,7 @@ function buildDocWrap(which, pageBodies){
   const pageCount = pageBodies.length;
   wrap.innerHTML = `
     <div class="preview-toolbar">
-      <span class="pg-info">${pageCount>1 ? `총 ${pageCount}페이지` : '1페이지'}</span>
+      <span class="pg-info">${pageCount>1 ? `全 ${pageCount} ページ` : '1 ページ'}</span>
       <button class="btn small secondary" onclick="printPage('${which}')">🖨️ PDF保存/印刷 (${pageCount}p)</button>
     </div>
     ${pageBodies.map(b => `<div class="a4-page">${b}</div>`).join('')}
@@ -5995,6 +5998,139 @@ function d03aTextLayer(pdf,pg,ox,wpt){
       pdf.text(w, ox+(rc.left-pr.left)*k, (rc.top-pr.top+rc.height*0.8)*k, {renderingMode:'invisible', baseline:'alphabetic'});
     }
   }
+}
+/* ══════════════════════════════════════════════════════
+   v4.14: FD 文字版 自動保存 (決定 F1 「(가)」 · 2026-11-25)
+   - 「✅ 全書類を生成」 (buildAll) の最後に自動で動く (ボタン追加なし · 人の作業 0)
+   - 中身 = この画面が作る FD 書類: Invoice · Packing List (FINAL DOCUMENT の運賃設定) + 生成した証明書 (タブ順 · N/A · 非表示タブは除く)
+   - 作り方 = 自動モードと同じ (html2canvas の画像 + 見えない文字の層 · 英数字は文字で読める)。印刷 (window.print) の PDF とは別物
+   - 保存先 = 古紙/-. 古紙書類/▲ 書類作成中/{IV}/{IV}_FD_DATA.pdf — 既にあれば _FD_DATA_2.pdf · _3 … (上書き 0 · conflictBehavior=fail)
+     フォルダが無ければ作らない (失敗表示)。試験 = URL ?fddata_test=1 → 古紙/-. AI 活用/D-00/doc_tool/save_test/{IV}/
+   - 画面の書類 (通関書類タブ · FD タブ · 印刷) は変えない — IV · PL は buildDocWrap を一時的に横取りして本文だけ受け取る
+══════════════════════════════════════════════════════ */
+const FDDATA_ROOT='古紙/-. 古紙書類/▲ 書類作成中';
+const FDDATA_TEST_ROOT='古紙/-. AI 活用/D-00/doc_tool/save_test';
+const FDDATA_TABS=['qq','co','bene','ft','bene-mail','esl','mail','md','form69'];
+const FDDATA_DONE={};                            // {IV: {key: 内容の指紋, name}} — 同じ画面で同じ内容を 2 回保存しない
+function fdDataTest(){ try{ return new URLSearchParams(location.search).get('fddata_test')==='1'; }catch(e){ return false; } }
+function fdDataFolder(iv){ return (fdDataTest()?FDDATA_TEST_ROOT:FDDATA_ROOT)+'/'+iv; }
+/* 既にある名前から次の名前 */
+function fdDataNextName(iv,names){
+  const up=s=>String(s||'').toUpperCase();
+  const have=new Set((names||[]).map(up));
+  if(!have.has(up(iv+'_FD_DATA.pdf'))) return iv+'_FD_DATA.pdf';
+  for(let n=2;n<1000;n++){ const c=iv+'_FD_DATA_'+n+'.pdf'; if(!have.has(up(c))) return c; }
+  throw new Error('版番号が 999 を超えました');
+}
+function fdDataMsg(kind,text){
+  const el=document.getElementById('fdDataMsg'); if(!el) return;
+  el.style.display=text?'block':'none';
+  el.style.color=kind==='ok'?'var(--ok)':kind==='ng'?'var(--danger)':'var(--muted)';
+  el.textContent=(fdDataTest()?'[試験] ':'')+text;
+}
+/* IV · PL (FD の運賃設定) の本文 — 画面の doc-invoice / doc-pl · 警告欄 · S の値は元のまま */
+function fdDataIvPlBodies(){
+  const out=[]; const keepFn=buildDocWrap;
+  const W=['no45Warn','no45WarnFD','nameWarn','nameWarnFD','fxNote','fxNoteFD'].map(id=>{ const e=document.getElementById(id); return e?[e,e.innerHTML,e.style.display]:null; }).filter(Boolean);
+  const keep={showFreight:S.showFreight, ivPod:{...S.ivPod}, siPod:{...S.siPod}};
+  try{
+    buildDocWrap=function(which,bodies){ out.push(...bodies); };
+    S.showFreight=S.showFreightFD; syncSelectedPodToIvPod();
+    renderInvoice(); renderPackingList();
+  }finally{
+    buildDocWrap=keepFn;
+    S.showFreight=keep.showFreight; S.ivPod=keep.ivPod; S.siPod=keep.siPod;
+    W.forEach(([e,h,d])=>{ e.innerHTML=h; e.style.display=d; });
+  }
+  return out;
+}
+/* 生成した証明書のページ (印刷と同じ単位: .cert-wrap 1 つ = 1 ページ · R.A. 書式は .a4-page) */
+function fdDataCertEls(){
+  const els=[];
+  FDDATA_TABS.forEach(id=>{
+    const tab=document.getElementById('tab-'+id); if(tab&&tab.style.display==='none') return;
+    const p=document.getElementById('panel-'+id); if(!p) return;
+    p.querySelectorAll('.cert-wrap, .ra-wrap .a4-page').forEach(el=>{
+      for(let a=el; a&&a!==p; a=a.parentElement) if(a.style&&a.style.display==='none') return;
+      if(el.querySelector('.na-panel')) return;
+      if(!String(el.textContent||'').trim()) return;
+      els.push(el);
+    });
+  });
+  return els;
+}
+async function fdDataAutoSave(){
+  const iv=String(S.invoiceNo||(S.booking&&S.booking.cr49f_invoice_no)||'').trim().toUpperCase();
+  if(!iv||DEMO_MODE) return {ok:false, skip:true};
+  const stage=document.createElement('div');
+  stage.id='fdDataStage';
+  stage.setAttribute('aria-hidden','true');
+  stage.style.cssText='position:absolute;left:0;top:0;width:820px;background:#fff;z-index:-1;pointer-events:none;';
+  try{
+    fdDataMsg('', 'FD_DATA 保存中… ('+iv+')');
+    let ivpl=[]; let ivplErr='';
+    try{ ivpl=fdDataIvPlBodies(); }catch(e){ ivplErr=e.message||String(e); }
+    const certs=fdDataCertEls();
+    ivpl.forEach(b=>{ const d=document.createElement('div'); d.className='a4-page'; d.innerHTML=b; stage.appendChild(d); });
+    certs.forEach(el=>{ const c=el.cloneNode(true); c.style.display='block'; c.style.margin='0'; stage.appendChild(c); });
+    const pages=[...stage.children];
+    if(!pages.length) throw new Error('書類のページがありません');
+    const key=iv+'|'+pages.map(p=>p.textContent.replace(/\s+/g,' ')).join('|');
+    if(FDDATA_DONE[iv]&&FDDATA_DONE[iv].key===key){ fdDataMsg('ok','FD_DATA は保存済みです (同じ内容): '+FDDATA_DONE[iv].name); return {ok:true, same:true, name:FDDATA_DONE[iv].name}; }
+    const folder=fdDataFolder(iv);
+    const fr=await fdDataGraph(GRAPH_BASE+'drives/'+LEENAI.SP.DRIVE_ID+'/root:/'+fdDataEnc(folder)+':/children?$select=name&$top=999');
+    if(fr.status===404&&!fdDataTest()) throw new Error('フォルダがありません ('+folder+')');   // 本番: Invoice フォルダは作らない
+    if(fr.status!==404&&!fr.ok) throw new Error('フォルダを読めません (Graph '+fr.status+')');
+    let names=fr.status===404?[]:((await fr.json()).value||[]).map(x=>x.name);   // 試験: save_test/{IV}/ は PUT で作られる
+    if(!window.html2canvas) await d03aLoad(D03A_LIBS[0]);
+    if(!(window.jspdf&&window.jspdf.jsPDF)) await d03aLoad(D03A_LIBS[1]);
+    document.body.appendChild(stage);
+    const pdf=new window.jspdf.jsPDF({unit:'pt', format:'a4', compress:true});
+    const PW=595.28, PH=841.89;
+    for(let i=0;i<pages.length;i++){
+      const pg=pages[i]; pg.style.boxShadow='none';
+      const cv=await window.html2canvas(pg,{scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false});
+      if(!cv.width||!cv.height) throw new Error('ページを描けませんでした ('+(i+1)+')');
+      const r=pg.getBoundingClientRect(); const ratio=(r.width&&r.height)?r.height/r.width:PH/PW;
+      let w=PW, h=PW*ratio; if(h>PH){ h=PH; w=PH/ratio; }
+      const ox=(PW-w)/2;
+      if(i) pdf.addPage('a4','portrait');
+      pdf.addImage(cv.toDataURL('image/jpeg',0.88),'JPEG',ox,0,w,h,undefined,'FAST');
+      d03aTextLayer(pdf,pg,ox,w);
+    }
+    pdf.setProperties({title:iv+'_FD_DATA', subject:'FD DATA (D-03)', creator:'D-03 v4.14 · ✦ Powered by LEENAI Automation System'});
+    const body=pdf.output('arraybuffer');
+    let saved=null, name='';
+    for(let t=0;t<5&&!saved;t++){
+      name=fdDataNextName(iv,names);
+      const r=await fdDataGraph(GRAPH_BASE+'drives/'+LEENAI.SP.DRIVE_ID+'/root:/'+fdDataEnc(folder+'/'+name)+':/content?@microsoft.graph.conflictBehavior=fail',
+        {method:'PUT', headers:{'Content-Type':'application/pdf'}, body:new Blob([body],{type:'application/pdf'})});
+      if(r.status===409){ names=names.concat(name); continue; }      // 同時に同じ名前 → 次の番号
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error('Graph '+r.status+(r.status===403?' (書き込み権限なし · 再ログインしてください)':'')+(e.error&&e.error.message?' '+e.error.message:'')); }
+      saved=await r.json();
+    }
+    if(!saved) throw new Error('名前が決まりません');
+    if(saved.size!=null&&saved.size!==body.byteLength) throw new Error('サイズ不一致 ('+saved.size+' / '+body.byteLength+')');
+    FDDATA_DONE[iv]={key, name};
+    const hm=new Date().toTimeString().slice(0,5);
+    fdDataMsg('ok','✅ FD_DATA 保存しました: '+(fdDataTest()?'save_test':'▲ 書類作成中')+'/'+iv+'/'+name+' ('+pages.length+' ページ · '+hm+')'+(ivplErr?' — IV · PL なし ('+ivplErr+')':''));
+    return {ok:true, name, folder, pages:pages.length, bytes:body.byteLength, ivpl:ivpl.length, certs:certs.length};
+  }catch(e){
+    fdDataMsg('ng','⚠ FD_DATA 保存できませんでした: '+(e.message||String(e)));
+    return {ok:false, error:e.message||String(e)};
+  }finally{
+    stage.remove();
+  }
+}
+function fdDataEnc(p){ return p.split('/').map(encodeURIComponent).join('/'); }
+async function fdDataGraph(url,opts,_r){
+  _r=_r||0; const tok=await LEENAI.auth.token('graph');
+  if(!tok) throw new Error('Graph トークンがありません');
+  const o=Object.assign({},opts||{}); o.headers=Object.assign({Authorization:'Bearer '+tok},(opts&&opts.headers)||{});
+  const r=await fetch(url,o);
+  if(r.status===401&&_r===0) return fdDataGraph(url,opts,1);
+  if((r.status===429||r.status>=500)&&_r<3){ await new Promise(ok=>setTimeout(ok,1000*Math.pow(2,_r))); return fdDataGraph(url,opts,_r+1); }
+  return r;
 }
 function d03AutoBoot(){
   const u=LEENAI.user||{};
