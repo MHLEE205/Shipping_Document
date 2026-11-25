@@ -310,6 +310,7 @@ input,select{font-family:inherit;}
 /* v3.41: コンテナTYPE 非表示業者(INDAH KIAT / TJIWI KIMIA) 赤色警告 — ツール画面のみ */
 .no45-warn{background:rgba(248,81,73,.14);border:2px solid var(--danger);border-radius:6px;padding:10px 14px;font-size:13px;font-weight:700;color:var(--danger);margin-bottom:10px;line-height:1.6;}
 @media print{.no45-warn{display:none!important;}}
+@media print{#fdDataMsg,#fdDataStale{display:none!important;}}   /* v4.15: FD_DATA の表示は印刷に出さない */
 .summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px 20px;font-size:13px;}
 .summary-grid .lbl{color:var(--muted);font-size:11px;margin-bottom:2px;}
 .summary-grid .val{font-weight:700;color:var(--text);}
@@ -619,9 +620,10 @@ input,select{font-family:inherit;}
           <div class="sub-box-title">運賃表示設定</div>
           <label class="check-row">
             <input type="checkbox" id="showFreightFDCheck"
-              onchange="S.showFreightFD=this.checked">
+              onchange="S.showFreightFD=this.checked;fdDataStaleCheck()">
             FOB 運賃 含む (Freight / Insurance / FOB)
           </label>
+          <div id="fdDataStale" class="no-print" style="display:none;font-size:12px;font-weight:700;color:var(--danger);margin-top:4px;"></div>
         </div>
         <div style="margin-top:10px;display:flex;gap:8px;">
           <button class="btn btn-success" onclick="S.showFreight=S.showFreightFD;syncSelectedPodToIvPod();renderInvoice();showPreview('invoice');showPreviewFD('invoice')">Invoice プレビュー</button>
@@ -734,7 +736,7 @@ if(D03_AUTO){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.14',
+  version:'4.15',
   date:'2026-11-25',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   graphScopes:['Sites.ReadWrite.All'],   // v4.14: FD 文字版 (FD_DATA) を Invoice フォルダへ保存 (新規作成だけ · 上書き 0)
@@ -4581,7 +4583,7 @@ function switchTab(name){
 function printDocs(tab){
   if(tab==='bene'&&S.importer==='MEGA_SURYA'&&S._beneDatePrint) renderBeneCertMegaSurya();   // v4.10: 直送証明 Bene は印刷日で再生成
   const iv=S.invoiceNo||'DOC';
-  const nameMap={qq:`${iv}_QQ`,co:`${iv}_CO`,bene:`${iv}_BC`,ft:`${iv}_FT`,esl:`${iv}_ESL`,mail:`${iv}_MAIL`,md:`${iv}_MD`,form69:`${iv}_FORM6_9`};
+  const nameMap={qq:`${iv}_QQ`,co:`${iv}_CO`,bene:`${iv}_BC`,ft:`${iv}_FT`,esl:`${iv}_ESL`,mail:`${iv}_MAIL`,'bene-mail':`${iv}_BC_MAIL`,md:`${iv}_MD`,form69:`${iv}_FORM6_9`};
   const origTitle=document.title;
   if(nameMap[tab]) document.title=nameMap[tab];
   switchTab(tab);
@@ -6012,6 +6014,7 @@ const FDDATA_ROOT='古紙/-. 古紙書類/▲ 書類作成中';
 const FDDATA_TEST_ROOT='古紙/-. AI 活用/D-00/doc_tool/save_test';
 const FDDATA_TABS=['qq','co','bene','ft','bene-mail','esl','mail','md','form69'];
 const FDDATA_DONE={};                            // {IV: {key: 内容の指紋, name}} — 同じ画面で同じ内容を 2 回保存しない
+let FDDATA_LAST=null;                            // v4.15 (D4): 最後に FD_DATA を作った時の {IV, FD 運賃}
 function fdDataTest(){ try{ return new URLSearchParams(location.search).get('fddata_test')==='1'; }catch(e){ return false; } }
 function fdDataFolder(iv){ return (fdDataTest()?FDDATA_TEST_ROOT:FDDATA_ROOT)+'/'+iv; }
 /* 既にある名前から次の名前 */
@@ -6076,12 +6079,13 @@ async function fdDataAutoSave(){
     const pages=[...stage.children];
     if(!pages.length) throw new Error('書類のページがありません');
     const key=iv+'|'+pages.map(p=>p.textContent.replace(/\s+/g,' ')).join('|');
-    if(FDDATA_DONE[iv]&&FDDATA_DONE[iv].key===key){ fdDataMsg('ok','FD_DATA は保存済みです (同じ内容): '+FDDATA_DONE[iv].name); return {ok:true, same:true, name:FDDATA_DONE[iv].name}; }
+    if(FDDATA_DONE[iv]&&FDDATA_DONE[iv].key===key){ FDDATA_LAST={iv, freight:!!S.showFreightFD}; fdDataStaleCheck(); fdDataMsg('ok','FD_DATA は保存済みです (同じ内容): '+FDDATA_DONE[iv].name); return {ok:true, same:true, name:FDDATA_DONE[iv].name}; }
     const folder=fdDataFolder(iv);
-    const fr=await fdDataGraph(GRAPH_BASE+'drives/'+LEENAI.SP.DRIVE_ID+'/root:/'+fdDataEnc(folder)+':/children?$select=name&$top=999');
+    const fr=await fdDataGraph(GRAPH_BASE+'drives/'+LEENAI.SP.DRIVE_ID+'/root:/'+fdDataEnc(folder)+':/children?$top=999');   // v4.15: 一覧に @microsoft.graph.downloadUrl も (最新 FD_DATA の中身を比べる)
     if(fr.status===404&&!fdDataTest()) throw new Error('フォルダがありません ('+folder+')');   // 本番: Invoice フォルダは作らない
     if(fr.status!==404&&!fr.ok) throw new Error('フォルダを読めません (Graph '+fr.status+')');
-    let names=fr.status===404?[]:((await fr.json()).value||[]).map(x=>x.name);   // 試験: save_test/{IV}/ は PUT で作られる
+    const items=fr.status===404?[]:((await fr.json()).value||[]);
+    let names=items.map(x=>x.name);   // 試験: save_test/{IV}/ は PUT で作られる
     if(!window.html2canvas) await d03aLoad(D03A_LIBS[0]);
     if(!(window.jspdf&&window.jspdf.jsPDF)) await d03aLoad(D03A_LIBS[1]);
     document.body.appendChild(stage);
@@ -6098,8 +6102,18 @@ async function fdDataAutoSave(){
       pdf.addImage(cv.toDataURL('image/jpeg',0.88),'JPEG',ox,0,w,h,undefined,'FAST');
       d03aTextLayer(pdf,pg,ox,w);
     }
-    pdf.setProperties({title:iv+'_FD_DATA', subject:'FD DATA (D-03)', creator:'D-03 v4.14 · ✦ Powered by LEENAI Automation System'});
+    pdf.setProperties({title:iv+'_FD_DATA', subject:'FD DATA (D-03)', creator:'D-03 v4.15 · ✦ Powered by LEENAI Automation System'});
     const body=pdf.output('arraybuffer');
+    // v4.15 (D2): その Invoice フォルダの最新 FD_DATA と 文字の層が同じなら 保存しない (ページを開き直しても)
+    const last=fdDataLatest(iv,items);
+    if(last){
+      const same=await fdDataSameText(last,body).catch(()=>null);   // 読めない · 比べられない → 保存する (null)
+      if(same===true){
+        FDDATA_DONE[iv]={key, name:last.name}; FDDATA_LAST={iv, freight:!!S.showFreightFD}; fdDataStaleCheck();
+        fdDataMsg('ok','FD_DATA は保存済みです (同じ内容): '+last.name);
+        return {ok:true, same:true, name:last.name, folderSame:true};
+      }
+    }
     let saved=null, name='';
     for(let t=0;t<5&&!saved;t++){
       name=fdDataNextName(iv,names);
@@ -6111,7 +6125,7 @@ async function fdDataAutoSave(){
     }
     if(!saved) throw new Error('名前が決まりません');
     if(saved.size!=null&&saved.size!==body.byteLength) throw new Error('サイズ不一致 ('+saved.size+' / '+body.byteLength+')');
-    FDDATA_DONE[iv]={key, name};
+    FDDATA_DONE[iv]={key, name}; FDDATA_LAST={iv, freight:!!S.showFreightFD}; fdDataStaleCheck();
     const hm=new Date().toTimeString().slice(0,5);
     fdDataMsg('ok','✅ FD_DATA 保存しました: '+(fdDataTest()?'save_test':'▲ 書類作成中')+'/'+iv+'/'+name+' ('+pages.length+' ページ · '+hm+')'+(ivplErr?' — IV · PL なし ('+ivplErr+')':''));
     return {ok:true, name, folder, pages:pages.length, bytes:body.byteLength, ivpl:ivpl.length, certs:certs.length};
@@ -6121,6 +6135,59 @@ async function fdDataAutoSave(){
   }finally{
     stage.remove();
   }
+}
+/* v4.15 (D4): 「生成」 の後に FD 運賃のチェックを変えた → 画面に 1 行 (印刷には出ない) */
+function fdDataStaleCheck(){
+  const el=document.getElementById('fdDataStale'); if(!el) return;
+  const iv=String(S.invoiceNo||'').trim().toUpperCase();
+  const stale=!!(FDDATA_LAST&&FDDATA_LAST.iv===iv&&FDDATA_LAST.freight!==!!S.showFreightFD);
+  el.textContent=stale?'⚠ FD_DATA と違います — もう一度 生成':'';
+  el.style.display=stale?'block':'none';
+}
+/* v4.15 (D2): フォルダの FD_DATA のうち 番号がいちばん大きいもの */
+function fdDataLatest(iv,items){
+  const head=(iv+'_FD_DATA').toUpperCase();
+  let best=null, bn=0;
+  (items||[]).forEach(x=>{
+    const nm=String(x&&x.name||'').toUpperCase(); if(nm.slice(0,head.length)!==head) return;
+    const m=/^(?:_(\d+))?\.PDF$/.exec(nm.slice(head.length)); if(!m) return;
+    const n=m[1]?parseInt(m[1],10):1; if(n>bn){ bn=n; best=x; }
+  });
+  return best;
+}
+/* PDF の 文字の層 (… Tj の文字) を順に取り出す — FlateDecode の流れは開く · 画像は読まない */
+async function fdDataPdfWords(buf){
+  const u8=new Uint8Array(buf); const words=[];
+  let txt=''; for(let i=0;i<u8.length;i+=8192) txt+=String.fromCharCode.apply(null,u8.subarray(i,i+8192));
+  const re=/<<((?:(?!>>\s*stream)[\s\S]){0,2000})>>\s*stream\x0d?\x0a/g; let m;
+  while((m=re.exec(txt))){
+    const dict=m[1]; const start=m.index+m[0].length;
+    const end=txt.indexOf('endstream',start); if(end<0) break;
+    re.lastIndex=end;
+    if(/\/Subtype\s*\/Image/.test(dict)) continue;
+    const lm=/\/Length\s+(\d+)(?!\s+\d+\s+R)/.exec(dict);          // 長さ (直接の数) — 無ければ endstream の前の改行を除く
+    let e2=end; if(lm&&start+parseInt(lm[1],10)<=end) e2=start+parseInt(lm[1],10); else while(e2>start&&(u8[e2-1]===10||u8[e2-1]===13)) e2--;
+    const data=u8.subarray(start,e2);
+    let s;
+    if(/\/FlateDecode/.test(dict)){
+      if(typeof DecompressionStream!=='function') throw new Error('no DecompressionStream');
+      const out=await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer().catch(()=>null);
+      if(!out) continue;
+      const o8=new Uint8Array(out); s=''; for(let i=0;i<o8.length;i+=8192) s+=String.fromCharCode.apply(null,o8.subarray(i,i+8192));
+    }else s=txt.slice(start,end);
+    const tj=/\(((?:\\[\s\S]|[^\\)])*)\)\s*Tj/g; let t;
+    while((t=tj.exec(s))) words.push(t[1].replace(/\\([\\()])/g,'$1'));
+  }
+  // Bene の送信時刻 (B/L Date + 17 時台ランダム · 生成のたびに変わる) は比べない
+  return words.map((w,i)=>(/^17:\d\d$/.test(w)&&/^\d{4}\/\d{2}\/\d{2}$/.test(words[i-1]||''))?'17:**':w);
+}
+async function fdDataSameText(item,body){
+  const url=item&&item['@microsoft.graph.downloadUrl']; if(!url) return null;
+  if(item.size!=null&&item.size>40*1024*1024) return null;
+  const r=await fetch(url); if(!r.ok) return null;
+  const a=await fdDataPdfWords(await r.arrayBuffer()); const b=await fdDataPdfWords(body);
+  if(!a.length||!b.length) return null;
+  return a.length===b.length&&a.every((w,i)=>w===b[i]);
 }
 function fdDataEnc(p){ return p.split('/').map(encodeURIComponent).join('/'); }
 async function fdDataGraph(url,opts,_r){

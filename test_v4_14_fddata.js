@@ -166,7 +166,7 @@ const hangul=s=>/[가-힣]/.test(s);
     ok('buildAll の最後 (alert の後) で fdDataAutoSave()', /alert\('全書類を生成しました！[\s\S]*\);\s*\n\s*fdDataAutoSave\(\);/.test(ba));
     ok('ボタン追加なし (onclick に fdData なし)', !/onclick="[^"]*fdData/.test(html));
     ok('graphScopes Sites.ReadWrite.All', /graphScopes:\['Sites\.ReadWrite\.All'\]/.test(js));
-    ok('version 4.14', /version:'4\.14'/.test(js));
+    ok('version 4.14 以上', /version:'4\.1[4-9]'/.test(js));   // v4.15: 4.14 → 4.15
     ok('自動モード (通関書類送付) は 4.13 のまま (PDF を変えない)', /creator:'D-03 v4\.13 自動モード/.test(js)&&/window\.D03AUTO=\{version:'4\.13'/.test(js));
     const noCmt=html.replace(/\/\*[\s\S]*?\*\//g,'').replace(/<!--[\s\S]*?-->/g,'').split('\n').map(l=>l.replace(/(^|[^:'"])\/\/.*$/,'$1')).join('\n');
     ok('画面の文字に 한글 0', !hangul(noCmt), (noCmt.match(/.{0,30}[가-힣].{0,30}/)||[])[0]);
