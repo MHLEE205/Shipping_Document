@@ -736,8 +736,8 @@ if(D03_AUTO){
 LEENAI.init({
   sys:'D-03',
   name:'通関書類 / FINAL DOCUMENT',
-  version:'4.17',
-  date:'2026-11-25',
+  version:'4.18',
+  date:'2026-11-26',
   desc:'COMPASS のデータから IV・PL・S/I と FD 証明書類を作成します',
   graphScopes:['Sites.ReadWrite.All'],   // v4.14: FD 文字版 (FD_DATA) を Invoice フォルダへ保存 (新規作成だけ · 上書き 0)
   onReady:startTool,
@@ -5970,14 +5970,14 @@ async function d03aRun(o){
         if(!cv.width||!cv.height) throw new Error('ページを描けませんでした ('+(i+1)+')');
         if(i) pdf.addPage('a4','portrait');
         pdf.addImage(cv.toDataURL('image/jpeg',0.88),'JPEG',PW*(1-K)/2,0,PW*K,PH*K,undefined,'FAST');
-        d03aTextLayer(pdf,pg,PW*(1-K)/2,PW*K);   // 見えない文字の層 (検索 · コピー用 · 見た目は画像のまま)
+        d03aTextLayerLines(pdf,pg,PW*(1-K)/2,PW*K);   // 見えない文字の層 (検索 · コピー用 · 見た目は画像のまま) — v4.18: 行ごと · 本当の空白入り
       }
     }finally{ restore(); }
-    pdf.setProperties({title:S.invoiceNo+'_IV_PL_SI', creator:'D-03 v4.13 自動モード · ✦ Powered by LEENAI Automation System'});
+    pdf.setProperties({title:S.invoiceNo+'_IV_PL_SI', creator:'D-03 v4.18 自動モード · ✦ Powered by LEENAI Automation System'});
     const buf=pdf.output('arraybuffer');
     const u8=new Uint8Array(buf);
     const nw=S.containers.reduce((a,c)=>a+(c.crcf9_n_w||0),0);
-    return {ok:true, version:'4.13', iv:S.invoiceNo, file:S.invoiceNo+'_IV_PL_SI.pdf', pages:pages.length, pdf_b64:d03aB64(u8), bytes:u8.length, sha256:await d03aSha256(buf),
+    return {ok:true, version:'4.18', iv:S.invoiceNo, file:S.invoiceNo+'_IV_PL_SI.pdf', pages:pages.length, pdf_b64:d03aB64(u8), bytes:u8.length, sha256:await d03aSha256(buf),
       picks:P, warnings:W, si_avail:avail,
       info:{buyer_id:(S.saleContract||{})._cr49f_buyer_id_value||'', consignee:d03aCompany(siIv.crcf9_consignee), terms:(S.saleContract||{}).cr49f_terms_conditions||'',
             lc:hasLc, region_pod:regionPod, n_ct:S.containers.length, nw_kg:nw,
@@ -6204,11 +6204,73 @@ async function fdDataGraph(url,opts,_r){
   if((r.status===429||r.status>=500)&&_r<3){ await new Promise(ok=>setTimeout(ok,1000*Math.pow(2,_r))); return fdDataGraph(url,opts,_r+1); }
   return r;
 }
+/* v4.18: 自動モードの見えない文字の層 — 行ごと (同じ枠 · 同じ高さの単語を 1 つの文字列に · 単語の間は本当の空白)
+   v4.13 の単語ごとの層は Edge (PDFium) で空白が消える (例 INTERMEDIATECONSIGNEE) → 通関業者が PDF から写すと単語がつながる。
+   幅 = 画像の上の本当の行の幅 (Tz 横の倍率で合わせる) · 英数字だけ (日本語の単語で区切る · 日本語は画像だけ) · FD_DATA は今まで通り d03aTextLayer */
+function d03aTextLayerLines(pdf,pg,ox,wpt){
+  const pr=pg.getBoundingClientRect(); if(!pr.width) return 0;
+  const k=wpt/pr.width;
+  pdf.setFont('helvetica','normal');
+  const blk=el=>{ for(let a=el;a&&a!==pg;a=a.parentElement){ if(getComputedStyle(a).display!=='inline') return a; } return pg; };
+  const W=[];
+  const tw=document.createTreeWalker(pg,NodeFilter.SHOW_TEXT); let n;
+  while((n=tw.nextNode())){
+    const t=n.textContent; if(!t||!t.trim()) continue;
+    const pe=n.parentElement; const fs=parseFloat(getComputedStyle(pe).fontSize)||10; const b=blk(pe);
+    const re=/\S+/g; let m;
+    while((m=re.exec(t))){
+      const r=document.createRange(); r.setStart(n,m.index); r.setEnd(n,m.index+m[0].length);
+      const rc=r.getClientRects()[0]; if(!rc||!rc.width) continue;
+      W.push({w:m[0], lat:!/[^\x20-\x7E\xA0-\xFF]/.test(m[0]), n, s:m.index, e:m.index+m[0].length, b, fs, x:rc.left, r:rc.right, top:rc.top, h:rc.height});
+    }
+  }
+  // 行 = DOM の順で 同じ枠 (block) · 同じ高さ · 右へ進む 単語の続き
+  const lines=[];
+  W.forEach(w=>{
+    const L=lines[lines.length-1], p=L&&L[L.length-1];
+    if(p&&p.b===w.b&&Math.abs(p.top-w.top)<Math.max(2,p.h*0.5)&&w.x>=p.r-1) L.push(w); else lines.push([w]);
+  });
+  const sep=(a,c)=>{                               // a と c の間に 空白があったか (元の文字のまま)
+    if(a.n===c.n) return ' ';
+    if(/^\s/.test(a.n.textContent.slice(a.e))||/\s$/.test(c.n.textContent.slice(0,c.s))) return ' ';
+    return (c.x-a.r)>a.fs*0.15?' ':'';
+  };
+  let cnt=0;
+  lines.forEach(L=>{
+    // 英数字の続き · 同じ字の大きさ で区切る (日本語の単語 = 区切り · 層に入れない)
+    const segs=[]; let cur=null;
+    L.forEach(w=>{
+      if(!w.lat){ cur=null; return; }
+      if(cur&&cur[cur.length-1].fs===w.fs) cur.push(w); else { cur=[w]; segs.push(cur); }
+    });
+    segs.forEach(sg=>{
+      // 1 行 = 1 つの BT … ET: 単語ごとに Td (行の始まりからの距離 = 画像の上の本当の位置 · 字の幅の違いがたまらない) · 単語の後ろに 本当の空白文字 (同じ文字列の中)
+      //   v4.13 の単語ごとの BT … Tj … ET (空白文字 0) = Edge (PDFium) で空白が消える (例 INTERMEDIATECONSIGNEE)
+      //   単語ごとに BT を分けて空白を付ける = pdf.js が境目の空白を捨てる → 1 行 1 つの BT にする
+      const fpt=Math.max(1,sg[0].fs*k); pdf.setFontSize(fpt);
+      const H=pdf.internal.pageSize.getHeight();
+      const x0=ox+(sg[0].x-pr.left)*k, y0=H-(sg[0].top-pr.top+sg[0].h*0.8)*k;
+      const ops=['BT','/'+pdf.internal.getFont().id+' '+fpt.toFixed(3)+' Tf','3 Tr',x0.toFixed(3)+' '+y0.toFixed(3)+' Td'];
+      sg.forEach((w,i)=>{
+        if(i) ops.push(((w.x-sg[i-1].x)*k).toFixed(3)+' 0 Td');       // 前の単語の始まりから (本当の位置 · Td は Tz の影響なし)
+        const nx=sg[i+1], sp=nx?sep(w,nx):'';
+        const right=sp?Math.min(w.r, nx.x-w.fs*0.2):w.r;               // 空白の後ろは 字の大きさの 0.2 以上の隙間を残す (pdf.js は 0.03 未満の隙間で空白を捨てる)
+        const nat=pdf.getCharWidthsArray(w.w,{doKerning:false}).reduce((a,b)=>a+b,0)*fpt/pdf.internal.scaleFactor, tru=(right-w.x)*k;   // 字詰め (kerning) なし = PDF を読む側と同じ幅
+        const hs=nat>0&&tru>0?Math.min(2,Math.max(0.5,tru/nat)):1;   // 単語の幅を画像の上の本当の幅に
+        ops.push((hs*100).toFixed(2)+' Tz ('+pdf.internal.pdfEscape(w.w+sp)+') Tj');
+      });
+      ops.push('100 Tz','0 Tr','ET');
+      pdf.internal.write(ops.join(' '));
+      cnt++;
+    });
+  });
+  return cnt;
+}
 function d03AutoBoot(){
   const u=LEENAI.user||{};
   S.signerName=u.email?(SIGNER_MAP[String(u.email).toLowerCase()]||'PARK'):'PARK';
   let chain=Promise.resolve();
-  window.D03AUTO={version:'4.13', ready:Promise.resolve(true),
+  window.D03AUTO={version:'4.18', ready:Promise.resolve(true),
     run:function(o){ const p=chain.then(()=>d03aRun(o)); chain=p.catch(()=>{}); return p; }};   // 1 件ずつ順番に
 }
 
